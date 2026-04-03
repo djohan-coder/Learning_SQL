@@ -1,0 +1,11 @@
+CREATE TABLE products
+(
+product_id	INT PRIMARY KEY AUTO_INCREMENT PRIMARY KEY,
+nama_produk	VARCHAR(100) NOT NULL,
+kategori	VARCHAR(100),
+harga		DECIMAL(10,2) NOT NULL CHECK (harga > 0),
+stok		INT DEFAULT 0
+)ENGINE = InnoDB;
+
+DESC products;
+SHOW CREATE TABLE products;
