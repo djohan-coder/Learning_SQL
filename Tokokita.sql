@@ -1,6 +1,6 @@
 -- MySQL dump 10.13  Distrib 8.0.44, for Win64 (x86_64)
 --
--- Host: localhost    Database: Tokokita
+-- Host: localhost    Database: tokokita
 -- ------------------------------------------------------
 -- Server version	8.0.44
 
@@ -28,6 +28,7 @@ CREATE TABLE `customers` (
   `email` varchar(150) NOT NULL,
   `kota` varchar(80) DEFAULT NULL,
   `tanggal_daftar` date DEFAULT (curdate()),
+  `no_telepon` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`customer_id`),
   UNIQUE KEY `email` (`email`)
 ) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -39,7 +40,7 @@ CREATE TABLE `customers` (
 
 LOCK TABLES `customers` WRITE;
 /*!40000 ALTER TABLE `customers` DISABLE KEYS */;
-INSERT INTO `customers` VALUES (1,'Budi Baru','budi@gmail.com','Bali','2026-04-03'),(2,'Siti Rahayu','siti@gmail.com','Bandung','2026-04-03'),(3,'Andi Wijaya','andi@yahoo.com','Surabaya','2026-04-03'),(4,'Dewi Lestari','dewi@gmail.com','Yogyakarta','2026-04-03'),(5,'Reza Firmansyah','reza@gmail.com','Semarang','2026-04-03'),(6,'Maya Putri','maya@hotmail.com','Medan','2026-04-03'),(7,'Fajar Nugroho','fajar@gmail.com','Makassar','2026-04-03'),(8,'Rina Susanti','rina@yahoo.com','Palembang','2026-04-03'),(9,'Hendra Gunawan','hendra@gmail.com','Balikpapan','2026-04-03'),(10,'Putri Anjani','putri@gmail.com','Denpasar','2026-04-03');
+INSERT INTO `customers` VALUES (1,'Budi Baru','budi@gmail.com','Bali','2026-04-03','081234567891'),(2,'Siti Rahayu','siti@gmail.com','Bandung','2026-04-03','082345678912'),(3,'Andi Wijaya','andi@yahoo.com','Surabaya','2026-04-03','083456789123'),(4,'Dewi Lestari','dewi@gmail.com','Yogyakarta','2026-04-03','085678901234'),(5,'Reza Firmansyah','reza@gmail.com','Semarang','2026-04-03','087890123456'),(6,'Maya Putri','maya@hotmail.com','Medan','2026-04-03',NULL),(7,'Fajar Nugroho','fajar@gmail.com','Makassar','2026-04-03',NULL),(8,'Rina Susanti','rina@yahoo.com','Palembang','2026-04-03',NULL),(9,'Hendra Gunawan','hendra@gmail.com','Balikpapan','2026-04-03',NULL),(10,'Putri Anjani','putri@gmail.com','Denpasar','2026-04-03',NULL);
 /*!40000 ALTER TABLE `customers` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -141,4 +142,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-04-04  4:25:21
+-- Dump completed on 2026-04-06  0:00:34

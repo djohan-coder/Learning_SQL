@@ -41,3 +41,65 @@ WHERE product_id IN (
     ) as temp
     WHERE row_num > 1
 );
+
+# 1
+SELECT nama_produk, harga, stok 
+FROM products
+WHERE kategori = 'Elektronik'
+ORDER BY harga asc;
+
+# 2
+SELECT customer_id, nama, kota
+FROM customers 
+WHERE kota IN ('Jakarta', 'Bandung', 'Surabaya')
+ORDER BY nama ASC;
+
+# 3
+SELECT order_id, customer_id, status, total_harga
+FROM orders
+WHERE status != 'batal'
+	AND total_harga > 500000
+ORDER BY total_harga DESC;
+
+# 4
+SELECT nama_produk, harga, stok
+FROM products
+WHERE harga BETWEEN 200000 AND 1000000
+	AND stok > 0
+    AND nama_produk LIKE "%a%"
+ORDER BY harga DESC
+LIMIT 3;
+
+# 5
+SELECT	item_id,
+		order_id,
+        quantity AS 'Jumlah_stok',
+        subtotal AS 'Total_bayar'
+FROM order_items
+WHERE	quantity	> 1
+	AND	subtotal	> 500000
+ORDER BY subtotal DESC;
+
+# 6
+ALTER TABLE customers
+ADD COLUMN no_telepon VARCHAR(20);
+# Qeury mencari customers yang belum memiliki nomor telepon
+SELECT customer_id, nama
+FROM customers
+WHERE no_telepon IS NULL;
+
+# Update 5 customers dengan nomor telepon baru
+UPDATE customers
+SET no_telepon = CASE customer_id
+	WHEN 1 THEN '081234567891'
+	WHEN 2 THEN '082345678912'
+	WHEN 3 THEN '083456789123'
+	WHEN 4 THEN '085678901234'
+	WHEN 5 THEN '087890123456'
+END
+WHERE customer_id IN (1, 2, 3, 4, 5);
+
+# Verifikasi hasilnya:
+SELECT customer_id, nama, no_telepon
+FROM customers
+WHERE no_telepon IS NOT NULL;
