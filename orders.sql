@@ -28,3 +28,6 @@ UPDATE orders SET status = 'proses'  WHERE order_id IN (5,6);
 UPDATE orders SET status = 'pending' WHERE order_id IN (7,8);
 
 SELECT * FROM orders;
+
+
+	

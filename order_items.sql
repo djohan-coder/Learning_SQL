@@ -62,3 +62,62 @@ SELECT * FROM order_items;
 # Menghitung total pembeli
 SELECT COUNT(*) AS total_items FROM order_items;
 
+# HARI 5
+
+# Menghitung Total revenue per kategori produk
+# 1
+SELECT
+	COUNT(order_id)		AS	total_transaksi,
+    SUM(total_harga)	AS	total_revenue,
+    AVG(total_harga)	AS	rata_rata,
+    MAX(total_harga)	AS	terbesar,
+    MIN(total_harga)	AS	terkecil
+FROM orders;
+
+# 2
+SELECT
+	status,
+    COUNT(order_id)		AS jumlah_order
+FROM orders
+GROUP BY status
+ORDER BY jumlah_order DESC;
+
+# 3
+SELECT
+	c.nama,
+    c.kota,
+    COUNT(o.order_id)	AS	jumlah_order,
+    SUM(o.total_harga)	AS	total_belanja
+FROM customers AS c
+LEFT JOIN orders AS o ON o.customer_id = c.customer_id
+GROUP BY c.customer_id, c.nama, c.kota
+HAVING total_belanja > 500000
+ORDER BY total_belanja DESC;
+
+# 4
+SELECT
+	p.nama_produk,
+    p.kategori,
+	SUM(oi.quantity)AS total_quantity_terjual,
+	SUM(oi.subtotal)AS	total_revenue
+FROM order_items AS oi
+INNER JOIN products	AS p ON oi.product_id = p.product_id
+GROUP BY p.nama_produk, p.kategori
+ORDER BY total_quantity_terjual DESC
+LIMIT 5;
+
+# 5
+SELECT
+	p.kategori,
+    COUNT(oi.item_id)	AS total_transaksi,
+    SUM(oi.subtotal)	AS	total_revenue,
+    AVG(oi.subtotal)	AS	rata_rata_transaksi
+FROM order_items AS oi
+INNER JOIN products AS p ON oi.product_id = p.product_id
+INNER JOIN orders AS o ON oi.order_id = o.order_id
+WHERE o.status = 'selesai'
+GROUP BY p.kategori
+HAVING total_revenue > 1000000
+ORDER BY total_revenue DESC;
+
+
