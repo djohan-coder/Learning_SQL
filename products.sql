@@ -103,3 +103,137 @@ WHERE customer_id IN (1, 2, 3, 4, 5);
 SELECT customer_id, nama, no_telepon
 FROM customers
 WHERE no_telepon IS NOT NULL;
+
+# HARI 6
+# 1
+SELECT nama_produk, harga
+FROM products
+WHERE harga > (SELECT AVG(harga) FROM products)
+ORDER BY harga DESC;
+
+# 2
+SELECT nama, kota, tanggal_daftar
+FROM customers
+WHERE customer_id IN (
+	SELECT customer_id
+    FROM orders
+    WHERE status = 'selesai'
+);
+
+# 3
+SELECT nama_produk, kategori, stok,
+	(SELECT AVG(stok) FROM products) AS rata_rata_produk
+FROM products
+WHERE stok < (SELECT AVG(stok) FROM products);
+
+# 4
+SELECT dt.nama_customer, dt.total_belanja
+FROM
+(	SELECT c.nama AS nama_customer, SUM(o.total_harga) AS total_belanja
+	FROM customers AS c
+    JOIN orders AS o ON c.customer_id = o.customer_id
+    GROUP BY c.customer_id, c.nama
+) AS dt
+WHERE dt.total_belanja > (
+	SELECT AVG(total_belanja)
+    FROM (
+		SELECT SUM(total_harga) AS total_belanja
+        FROM orders
+        GROUP BY customer_id
+	) AS sub_avg
+);
+
+
+# 5
+SELECT
+	p.nama_produk, p.kategori, p.harga
+FROM products AS p
+LEFT JOIN order_items AS oi ON p.product_id = oi.product_id
+WHERE oi.order_id IS NULL;
+
+SELECT
+	p.nama_produk, p.kategori, p.harga
+FROM products AS p
+WHERE product_id NOT IN (
+	SELECT product_id FROM order_items
+);
+
+# Hari 7
+SELECT * FROM products;
+# 1
+# Verifikasi sebelum update
+SELECT product_id, nama_produk, kategori, harga
+FROM products
+WHERE kategori = 'Fashion';
+
+# Menjalankan Update menaikan harga 15%
+UPDATE products
+SET harga = harga * 1.15
+WHERE kategori = 'Fashion';
+
+# Jika diminta mematikan safemode
+SET SQL_SAFE_UPDATES = 0;
+SET SQL_SAFE_UPDATES = 1;
+
+# Verifikasi sesudah Update
+SELECT Product_id, nama_produk, kategori, harga
+FROM products
+WHERE kategori = 'Fashion';
+
+SELECT kota from customers;
+# 2
+UPDATE orders AS o
+JOIN customers AS c ON o.customer_id = c.customer_id
+SET o.status = 'batal'
+WHERE c.kota = 'Bali'
+	AND o.status = 'pending';
+    
+# 3
+UPDATE products AS p
+SET p.stok = p.stok - (
+	SELECT COALESCE(SUM(oi.quantity), 0)
+    FROM order_items AS oi
+    WHERE oi.product_id = p.product_id
+)
+WHERE p.product_id IN (SELECT product_id FROM order_items);
+
+# Cek Hasilnya
+SELECT product_id, nama_produk, stok FROM products WHERE stok < 0;
+
+# 4
+# Mulai blok transaksi
+START TRANSACTION;
+
+SELECT* FROM order_items;
+
+# Verifikasi data sebelum dihapus
+SELECT * FROM order_items WHERE order_id = 8;
+
+# Hapus item order
+DELETE FROM order_items WHERE order_id = 8;
+
+# Verifikasi data sesudah dihapus ( hasil 0 )
+SELECT COUNT(*) AS sisa_item FROM order_items WHERE order_id = 8;
+
+# Pilih commit jika sesuai, pilih rollback jika ragu atau gagal
+COMMIT;
+
+# 5
+# Tambah kolom penanda status aktif/nonaktif
+ALTER TABLE customers
+ADD COLUMN is_active TINYINT NOT NULL DEFAULT 1;
+
+# Hapus customer_id = 10 secara soft
+UPDATE customers
+SET is_active = 0
+WHERE customer_id = 10;
+
+# Query hanya menampilkan customer yang masih aktif
+SELECT customer_id, nama, email, kota, is_active
+FROM customers
+WHERE is_active = 1
+ORDER BY customer_id;
+
+
+
+
