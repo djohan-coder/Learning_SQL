@@ -41,7 +41,7 @@ CREATE TABLE `customers` (
 
 LOCK TABLES `customers` WRITE;
 /*!40000 ALTER TABLE `customers` DISABLE KEYS */;
-INSERT INTO `customers` VALUES (1,'Budi Baru','budi@gmail.com','Bali','2026-04-03','081234567891',1),(2,'Siti Rahayu','siti@gmail.com','Bandung','2026-04-03','082345678912',1),(3,'Andi Wijaya','andi@yahoo.com','Surabaya','2026-04-03','083456789123',1),(4,'Dewi Lestari','dewi@gmail.com','Yogyakarta','2026-04-03','085678901234',1),(5,'Reza Firmansyah','reza@gmail.com','Semarang','2026-04-03','087890123456',1),(6,'Maya Putri','maya@hotmail.com','Medan','2026-04-03',NULL,1),(7,'Fajar Nugroho','fajar@gmail.com','Makassar','2026-04-03',NULL,1),(8,'Rina Susanti','rina@yahoo.com','Palembang','2026-04-03',NULL,1),(9,'Hendra Gunawan','hendra@gmail.com','Balikpapan','2026-04-03',NULL,1),(10,'Putri Anjani','putri@gmail.com','Denpasar','2026-04-03',NULL,0);
+INSERT INTO `customers` VALUES (1,'Budi Baru','budi@gmail.com','Bali','2026-04-03','081234567891',1),(2,'Siti Rahayu','siti@gmail.com','Bandung','2026-04-03','082345678912',1),(3,'Andi Wijaya','andi@yahoo.com','Surabaya','2026-04-03','083456789123',1),(4,'Dewi Lestari','dewi@gmail.com','Yogyakarta','2026-04-03','085678901234',1),(5,'Reza Firmansyah','reza@gmail.com','Semarang','2026-04-03','087890123456',1),(6,'Maya Putri','maya@hotmail.com','Medan','2026-04-03',NULL,1),(7,'Fajar Nugroho','fajar@gmail.com','Makassar','2026-04-03',NULL,1),(8,'Rina Susanti','rina@yahoo.com','Palembang','2026-04-03',NULL,1),(9,'Hendra Gunawan','hendra@gmail.com','Balikpapan','2026-04-03',NULL,0),(10,'Putri Anjani','putri@gmail.com','Denpasar','2026-04-03',NULL,0);
 /*!40000 ALTER TABLE `customers` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -143,4 +143,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-04-09  5:26:33
+-- Dump completed on 2026-04-10  3:36:39
