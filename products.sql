@@ -234,6 +234,97 @@ FROM customers
 WHERE is_active = 1
 ORDER BY customer_id;
 
+SELECT * FROM products
+LIMIT 3;
 
+# HARI 8
+# 1
+SELECT
+	nama_produk,
+    kategori,
+    harga,
+    ROW_NUMBER()	OVER (PARTITION BY kategori	ORDER BY harga	DESC)	AS	row_number_rank,
+    RANK()			OVER (PARTITION BY kategori	ORDER BY harga	DESC)	AS	rank_val,
+    DENSE_RANK()	OVER (PARTITION BY kategori ORDER BY harga	DESC)	AS	dense_rank_val
+FROM products
+ORDER BY kategori, harga DESC;
 
+# 2
+SELECT
+	o.order_id,
+    c.nama,
+    o.tanggal_order,
+    o.total_harga,
+    SUM(o.total_harga) OVER(ORDER BY o.tanggal_order)	AS running_total
+FROM orders	AS o
+JOIN customers	AS c ON c.customer_id = o.customer_id;
 
+# 3
+SELECT
+	order_id,
+    total_harga,
+    ROUND(AVG(total_harga) OVER (), 2) AS rata_rata_order,
+    ROUND(total_harga - AVG(total_harga) OVER (), 2) AS selisih_dari_rata_rata,
+    CASE
+		WHEN total_harga > AVG(total_harga) OVER () THEN 'Di atas rata rata'
+        ELSE 'Di bawah rata rata'
+	END AS keterangan
+FROM orders
+ORDER BY total_harga DESC;
+
+# 4
+WITH order_lag AS (
+	SELECT
+		c.nama	AS nama_customer,
+		o.order_id,
+		o.tanggal_order,
+		o.total_harga,
+		LAG(o.total_harga, 1) OVER (
+			PARTITION BY o.customer_id
+			ORDER BY o.tanggal_order, o.order_id
+		) AS nilai_order_sebelumnya
+	FROM orders AS o
+	JOIN customers AS c ON o.customer_id = c.customer_id
+)
+SELECT
+	nama_customer,
+    order_id,
+    tanggal_order,
+    total_harga,
+    nilai_order_sebelumnya,
+	ROUND(total_harga - COALESCE(nilai_order_sebelumnya, 0), 2) AS selisih
+FROM order_lag
+ORDER BY nama_customer, tanggal_order, order_id;
+
+# 5
+WITH total_belanja AS (
+	SELECT
+		c.customer_id,
+        c.nama,
+        COALESCE(SUM(o.total_harga), 0) AS total_belanja
+	FROM customers AS c
+    LEFT JOIN orders AS o ON c.customer_id = o.customer_id
+		AND o.status = 'selesai'
+	GROUP BY c.customer_id, nama
+),
+segmentasi AS (
+	SELECT
+		customer_id,
+        nama,
+        total_belanja,
+        NTILE(4) OVER (ORDER BY total_belanja ASC) AS kuartil
+	FROM total_belanja
+)
+SELECT
+	customer_id,
+    nama,
+    total_belanja,
+    kuartil,
+	CASE kuartil
+		WHEN 1 THEN 'Bronze'
+        WHEN 2 THEN 'Silver'
+        WHEN 3 THEN 'Gold'
+        WHEN 4 THEN 'Platinum'
+	END AS segment
+FROM segmentasi
+ORDER BY total_belanja DESC;
