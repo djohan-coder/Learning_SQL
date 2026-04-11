@@ -237,7 +237,7 @@ ORDER BY customer_id;
 SELECT * FROM products
 LIMIT 3;
 
-# HARI 8
+# HARI 9
 # 1
 SELECT
 	nama_produk,
