@@ -164,3 +164,154 @@ SELECT * FROM metrics_order ORDER BY total_revenue DESC;
 SELECT * FROM metrics_produk;
 SELECT * FROM metrics_customer;
 SELECT * FROM metrics_kategori;
+
+# Hari 11
+# 1
+SELECT
+	a.nama_produk	AS	produk_a,
+    b.nama_produk	AS	produk_b,
+    a.kategori,
+    a.harga			AS	harga_a,
+    b.harga			AS	harga_b,
+    a.harga - b.harga	AS selisih_harga
+FROM products AS a
+JOIN products AS b
+	ON a.kategori = b.kategori
+    AND a.product_id < b.product_id
+ORDER BY a.kategori, selisih_harga;
+
+# 2
+SELECT c.nama, o.order_id, o.status
+FROM customers AS c
+LEFT JOIN orders AS o ON c.customer_id = o.customer_id
+UNION
+SELECT c.nama, o.order_id, o.status
+FROM customers AS c
+RIGHT JOIN orders AS o ON c.customer_id = o.customer_id
+WHERE c.customer_id IS NULL;
+
+# 3
+SELECT
+	p.nama_produk,
+    p.harga,
+    t.tier_nama
+FROM products AS p
+JOIN (
+	SELECT 'Budget' AS tier_nama, 0 AS min_harga, 200000 AS max_harga
+    UNION ALL SELECT 'Mid-range', 200001, 1000000
+    UNION ALL SELECT 'Premium', 1000001, 9999999
+) t ON p.harga BETWEEN t.min_harga AND t.max_harga
+ORDER BY p.harga;
+
+# 4
+SELECT
+	c.nama,
+    c.kota,
+    o.order_id,
+    o.tanggal_order,
+    o.status,
+    o.total_harga
+FROM customers AS c
+INNER JOIN (
+	SELECT customer_id, MAX(tanggal_order) AS max_tanggal
+    FROM orders
+    GROUP BY customer_id
+) last_date ON c.customer_id = last_date.customer_id
+INNER JOIN orders AS o ON c.customer_id = o.customer_id
+					AND last_date.max_tanggal = o.tanggal_order
+ORDER BY c.nama;
+
+# 5
+WITH revenue_produk AS (
+	SELECT
+		p.product_id,
+        p.nama_produk AS nama,
+        p.kategori,
+        COALESCE(SUM(oi.quantity * oi.harga_satuan), 0) AS revenue
+	FROM products AS p
+    LEFT JOIN order_items AS oi ON p.product_id = oi.product_id
+	GROUP BY p.product_id, p.nama_produk, p.kategori
+)
+SELECT
+	a.nama AS nama_produk_a,
+    b.nama AS nama_produk_b,
+    a.kategori,
+    a.revenue AS revenue_a,
+    b.revenue AS revenue_b,
+    ROUND(ABS(a.revenue - b.revenue), 2) AS selisih
+FROM revenue_produk AS a
+JOIN revenue_produk AS b ON a.kategori = b.kategori
+						AND a.product_id < b.product_id
+						AND ABS(a.revenue - b.revenue) < 1000000
+ORDER BY a.kategori, selisih ASC;
+
+# HARI 12
+# 1
+
+SELECT
+	nama,
+    email,
+	LEFT(email, LOCATE('@', email) -1)	AS username,
+    SUBSTRING(email, LOCATE('@', email) + 1)	AS domain,
+    CHAR_LENGTH(LEFT(email, LOCATE('@', email) - 1))	AS panjang_username
+FROM customers
+ORDER BY panjang_username ASC;
+
+# 2
+SELECT
+	CONCAT('PRD-', LPAD(product_id, 3, '0'))	AS kode_produk,
+	nama_produk,
+    kategori,
+    harga,
+    CONCAT('Rp ', FORMAT(harga, 0))	AS harga_format,
+	CONCAT('Rp ',LPAD(FORMAT(harga, 0), 15, '	'))	AS harga_aligned
+FROM products
+ORDER BY harga DESC;
+
+# 3
+SELECT
+	nama,
+    TRIM(LOWER(email))	AS email_bersih,
+    REPLACE(no_telepon, '-', '')	AS telepon_bersih,
+    CONCAT(UPPER(LEFT(nama, 1)),
+		LOWER(SUBSTRING(nama, 2)))	AS nama_proper,
+	CONCAT(LEFT(nama, 1), '-',
+    SUBSTRING(nama, LOCATE(' ', nama) + 1, 1)) AS inisial
+FROM customers;
+
+# 4
+-- Kelompokkan email
+SELECT
+	CASE
+		WHEN REPLACE(LOWER(email), ' ', '') REGEXP '@gmail' THEN 'Gmail'
+        ELSE 'Bukan Gmail'
+	END AS kategori_domain,
+    COUNT(*) AS jumlah_customer
+FROM customers
+GROUP BY kategori_domain;
+
+-- Tampilan semua customer dengan nomor telepon terformat
+SELECT
+	nama,
+    email,
+    CONCAT(
+		LEFT(no_telepon, 4),
+        '-',
+        SUBSTRING(no_telepon, 5, 4),
+        '-',
+        SUBSTRING(no_telepon, 9)
+        ) AS no_telepon_terformat
+FROM customers;
+
+# 5 
+SELECT
+	CONCAT('ORD-', LPAD(o.order_id, 4, '0')) AS kode_order,
+    CONCAT(c.nama, ' (', UPPER(LEFT(c.kota, 3)), ')') AS nama_customer,
+    CONCAT(p.nama_produk, ' (', p.kategori, ')') AS nama_produk_kategori,
+    CONCAT('Rp ', FORMAT(oi.harga_satuan, 0)) AS harga_rupiah,
+    CONCAT('Rp ', FORMAT(oi.subtotal, 0)) AS subtotal_format
+FROM orders AS o
+JOIN customers AS c ON o.customer_id = c.customer_id
+JOIN order_items AS oi ON o.order_id = oi.order_id
+JOIN products AS p ON oi.product_id = p.product_id
+ORDER BY o.order_id ASC;

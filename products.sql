@@ -328,3 +328,5 @@ SELECT
 	END AS segment
 FROM segmentasi
 ORDER BY total_belanja DESC;
+
+SELECT nama_produk FROM products;
