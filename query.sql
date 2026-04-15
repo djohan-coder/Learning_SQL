@@ -315,3 +315,113 @@ JOIN customers AS c ON o.customer_id = c.customer_id
 JOIN order_items AS oi ON o.order_id = oi.order_id
 JOIN products AS p ON oi.product_id = p.product_id
 ORDER BY o.order_id ASC;
+
+# Hari 13
+# 1
+SELECT
+	nama,
+    DATE_FORMAT(tanggal_daftar, '%d %M %Y') AS tanggal_daftar,
+    DATEDIFF(CURDATE(), tanggal_daftar) AS hari_bergabung,
+    TIMESTAMPDIFF(MONTH, tanggal_daftar, CURDATE()) AS bulan_bergabung,
+    YEAR(tanggal_daftar) AS tahun_daftar
+FROM customers
+WHERE tanggal_daftar IS NOT NULL
+ORDER BY tanggal_daftar ASC;
+
+# 2
+-- Dengan CTE + handle NULL
+WITH monthly_orders AS (
+	SELECT
+		YEAR(tanggal_order)					AS tahun,
+		MONTH(tanggal_order)				AS bulan,
+		DATE_FORMAT(tanggal_order, '%M %Y')	AS nama_bulan,
+		COALESCE(total_harga, 0) AS revenue
+FROM orders
+WHERE status = 'selesai'
+)
+SELECT
+	tahun,
+    bulan,
+    nama_bulan,
+    COUNT(*) AS jumlah_order,
+    ROUND(SUM(revenue), 2) AS total_revenue,
+    ROUND(AVG(revenue), 2) AS rata_rata_order
+FROM monthly_orders
+GROUP BY tahun, bulan, nama_bulan
+ORDER BY tahun, bulan;
+
+# 3
+WITH order_days AS (
+	SELECT
+		DAYOFWEEK(tanggal_order)	AS day_number,
+		DAYNAME(tanggal_order) AS nama_hari,
+		total_harga
+FROM orders
+)
+SELECT
+	nama_hari,
+	COUNT(*) AS jumlah_order,
+    ROUND(SUM(total_harga), 2) AS total_revenue,
+    CASE
+		WHEN day_number BETWEEN 2 AND 6 THEN 'Weekday'
+        ELSE 'Weekend'
+	END AS kategori_hari
+FROM order_days
+GROUP BY day_number, nama_hari
+ORDER BY
+	CASE day_number WHEN 1 THEN 8 ELSE day_number END;
+
+# 4
+WITH monthly_revenue AS (
+	SELECT
+		DATE_FORMAT(tanggal_order, '%Y-%m') AS nama_bulan,
+        SUM(total_harga) AS revenue
+	FROM orders
+    WHERE status = 'selesai'
+    GROUP BY nama_bulan
+),
+revenue_with_lag AS (
+	SELECT
+		nama_bulan,
+        revenue AS revenue_bulan_ini,
+        LAG(revenue, 1) OVER (ORDER BY nama_bulan) AS revenue_bulan_lalu
+	FROM monthly_revenue
+)
+SELECT
+	nama_bulan,
+    revenue_bulan_ini,
+    COALESCE(revenue_bulan_lalu, 0) AS revenue_bulan_lalu,
+    CASE
+		WHEN revenue_bulan_lalu IS NULL OR revenue_bulan_lalu = 0 THEN 0
+        ELSE ROUND(((revenue_bulan_ini - revenue_bulan_lalu) / revenue_bulan_lalu) * 100, 2)
+	END AS pertumbuhan_persen,
+    CASE
+		WHEN revenue_bulan_lalu IS NULL THEN 'N/A (Data Pertama)'
+        WHEN revenue_bulan_ini > revenue_bulan_lalu THEN 'Naik'
+        WHEN revenue_bulan_ini < revenue_bulan_lalu THEN 'Turun'
+        ELSE 'Sama'
+	END AS tren
+    FROM revenue_with_lag
+    ORDER BY nama_bulan ASC;
+    
+# 5
+SELECT
+	c.nama AS naam_customer,
+    MIN(o.tanggal_order) AS tanggal_pertama,
+    MAX(o.tanggal_order) AS tanggal_terakhir,
+    DATEDIFF(MAX(o.tanggal_order), MIN(o.tanggal_order)) AS durasi_aktif_hari,
+    COUNT(*) AS total_order,
+    SUM(o.total_harga) AS total_belanja,
+    TIMESTAMPDIFF(MONTH, MIN(o.tanggal_order), MAX(o.tanggal_order)) AS bulan_aktif,
+    ROUND(
+		SUM(o.total_harga) / NULLIF(TIMESTAMPDIFF(MONTH, MIN(o.tanggal_order), MAX(o.tanggal_order)), 0), 
+        2) AS rata_rata_belanja_per_bulan,
+    CASE
+		WHEN DATEDIFF(CURDATE(), MAX(o.tanggal_order)) <= 60 THEN 'Aktif'
+        ELSE 'Tidak Aktif'
+	END AS status_customer
+FROM customers AS c
+JOIN orders AS o ON c.customer_id = o.customer_id
+GROUP BY c.customer_id, c.nama
+ORDER BY total_belanja DESC;
+		
