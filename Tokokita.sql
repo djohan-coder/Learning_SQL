@@ -31,7 +31,8 @@ CREATE TABLE `customers` (
   `no_telepon` varchar(20) DEFAULT NULL,
   `is_active` tinyint NOT NULL DEFAULT '1',
   PRIMARY KEY (`customer_id`),
-  UNIQUE KEY `email` (`email`)
+  UNIQUE KEY `email` (`email`),
+  KEY `idx_customers_id` (`customer_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -92,6 +93,8 @@ CREATE TABLE `orders` (
   `total_harga` decimal(12,2) DEFAULT NULL,
   PRIMARY KEY (`order_id`),
   KEY `fk_order_customers` (`customer_id`),
+  KEY `idx_orders_date_status_revenue` (`tanggal_order`,`status`,`total_harga`),
+  KEY `idx_orders_status_date` (`status`,`tanggal_order`,`customer_id`),
   CONSTRAINT `fk_order_customers` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -143,4 +146,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-04-15 23:48:51
+-- Dump completed on 2026-04-17  3:48:00
