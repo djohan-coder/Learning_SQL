@@ -47,6 +47,34 @@ INSERT INTO `customers` VALUES (1,'Budi Baru','budi@gmail.com','Bali','2026-04-0
 UNLOCK TABLES;
 
 --
+-- Table structure for table `log_aktivitas`
+--
+
+DROP TABLE IF EXISTS `log_aktivitas`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `log_aktivitas` (
+  `log_id` int NOT NULL AUTO_INCREMENT,
+  `tabel_name` varchar(50) NOT NULL,
+  `aksi` varchar(10) NOT NULL,
+  `data_lama` text,
+  `data_baru` text,
+  `waktu` datetime DEFAULT CURRENT_TIMESTAMP,
+  `user_db` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`log_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `log_aktivitas`
+--
+
+LOCK TABLES `log_aktivitas` WRITE;
+/*!40000 ALTER TABLE `log_aktivitas` DISABLE KEYS */;
+/*!40000 ALTER TABLE `log_aktivitas` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `order_items`
 --
 
@@ -96,7 +124,7 @@ CREATE TABLE `orders` (
   KEY `idx_orders_date_status_revenue` (`tanggal_order`,`status`,`total_harga`),
   KEY `idx_orders_status_date` (`status`,`tanggal_order`,`customer_id`),
   CONSTRAINT `fk_order_customers` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -108,6 +136,34 @@ LOCK TABLES `orders` WRITE;
 INSERT INTO `orders` VALUES (1,1,'2026-04-04 03:04:46','selesai',8500000.00),(2,2,'2026-04-04 03:04:46','selesai',250000.00),(3,3,'2026-04-04 03:04:46','selesai',750000.00),(4,4,'2026-04-04 03:04:46','selesai',2800000.00),(5,5,'2026-04-04 03:04:46','proses',85000.00),(6,6,'2026-04-04 03:04:46','proses',320000.00),(7,7,'2026-04-04 03:04:46','pending',450000.00),(8,8,'2026-04-04 03:04:46','pending',380000.00);
 /*!40000 ALTER TABLE `orders` ENABLE KEYS */;
 UNLOCK TABLES;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_audit_insert_orders` AFTER INSERT ON `orders` FOR EACH ROW BEGIN
+	INSERT INTO log_aktivitas (tabel_name, aksi, data_lama, data_baru, waktu, user_db)
+    VALUES	(
+		'orders',
+        'INSERT',
+        NULL,
+        CONCAT('order_id:', NEW.order_id,
+				' | customer_id:', NEW.customer_id,
+                ' | status:', NEW.status,
+                ' | total_harga:', NEW.total_harga),
+		NOW(),
+        USER()
+	);
+END */;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
 
 --
 -- Table structure for table `products`
@@ -136,6 +192,114 @@ LOCK TABLES `products` WRITE;
 INSERT INTO `products` VALUES (1,'Laptop Asus VivoBook','Elektronik',8500000.00,12),(2,'Mouse Wireless Logitech','Elektronik',250000.00,45),(3,'Keyboard Mechanical','Elektronik',750000.00,26),(4,'Monitor 24 inch','Elektronik',2800000.00,18),(5,'Kaos Polos Cotton','Fashion',97750.00,96),(6,'Celana Jeans Slim','Fashion',368000.00,57),(7,'Sepatu Sneakers','Fashion',517500.00,36),(8,'Blender Philips','Rumah Tangga',380000.00,24),(9,'Rice Cooker Miyako','Rumah Tangga',280000.00,34),(10,'Dispenser Galon','Rumah Tangga',420000.00,18);
 /*!40000 ALTER TABLE `products` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Temporary view structure for view `vw_order_lengkap`
+--
+
+DROP TABLE IF EXISTS `vw_order_lengkap`;
+/*!50001 DROP VIEW IF EXISTS `vw_order_lengkap`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `vw_order_lengkap` AS SELECT 
+ 1 AS `order_id`,
+ 1 AS `tanggal_order`,
+ 1 AS `status`,
+ 1 AS `total_order`,
+ 1 AS `nama_customer`,
+ 1 AS `kota`,
+ 1 AS `nama_produk`,
+ 1 AS `kategori`,
+ 1 AS `quantity`,
+ 1 AS `harga_satuan`,
+ 1 AS `subtotal_item`*/;
+SET character_set_client = @saved_cs_client;
+
+--
+-- Temporary view structure for view `vw_produk_performa`
+--
+
+DROP TABLE IF EXISTS `vw_produk_performa`;
+/*!50001 DROP VIEW IF EXISTS `vw_produk_performa`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `vw_produk_performa` AS SELECT 
+ 1 AS `nama_produk`,
+ 1 AS `kategori`,
+ 1 AS `total_quantity_terjual`,
+ 1 AS `total_revenue`,
+ 1 AS `stok_tersisa`,
+ 1 AS `status_stok`*/;
+SET character_set_client = @saved_cs_client;
+
+--
+-- Temporary view structure for view `vw_summary_customer`
+--
+
+DROP TABLE IF EXISTS `vw_summary_customer`;
+/*!50001 DROP VIEW IF EXISTS `vw_summary_customer`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `vw_summary_customer` AS SELECT 
+ 1 AS `nama`,
+ 1 AS `kota`,
+ 1 AS `jumlah_order`,
+ 1 AS `total_belanja`*/;
+SET character_set_client = @saved_cs_client;
+
+--
+-- Final view structure for view `vw_order_lengkap`
+--
+
+/*!50001 DROP VIEW IF EXISTS `vw_order_lengkap`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `vw_order_lengkap` AS select `o`.`order_id` AS `order_id`,`o`.`tanggal_order` AS `tanggal_order`,`o`.`status` AS `status`,`o`.`total_harga` AS `total_order`,`c`.`nama` AS `nama_customer`,`c`.`kota` AS `kota`,`p`.`nama_produk` AS `nama_produk`,`p`.`kategori` AS `kategori`,`oi`.`quantity` AS `quantity`,`oi`.`harga_satuan` AS `harga_satuan`,round((`oi`.`quantity` * `oi`.`harga_satuan`),2) AS `subtotal_item` from (((`orders` `o` join `customers` `c` on((`o`.`customer_id` = `c`.`customer_id`))) join `order_items` `oi` on((`o`.`order_id` = `oi`.`order_id`))) join `products` `p` on((`oi`.`product_id` = `p`.`product_id`))) */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
+
+--
+-- Final view structure for view `vw_produk_performa`
+--
+
+/*!50001 DROP VIEW IF EXISTS `vw_produk_performa`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `vw_produk_performa` AS select `p`.`nama_produk` AS `nama_produk`,`p`.`kategori` AS `kategori`,coalesce(sum(`oi`.`quantity`),0) AS `total_quantity_terjual`,coalesce(round(sum((`oi`.`quantity` * `oi`.`harga_satuan`)),2),0) AS `total_revenue`,`p`.`stok` AS `stok_tersisa`,(case when (`p`.`stok` = 0) then 'Habis' when (`p`.`stok` < 20) then 'Menipis' else 'Aman' end) AS `status_stok` from ((`products` `p` left join `order_items` `oi` on((`p`.`product_id` = `oi`.`product_id`))) left join `orders` `o` on(((`oi`.`order_id` = `o`.`order_id`) and (`o`.`status` = 'selesai')))) group by `p`.`product_id`,`p`.`nama_produk`,`p`.`kategori`,`p`.`stok` */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
+
+--
+-- Final view structure for view `vw_summary_customer`
+--
+
+/*!50001 DROP VIEW IF EXISTS `vw_summary_customer`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `vw_summary_customer` AS select `c`.`nama` AS `nama`,`c`.`kota` AS `kota`,count(`o`.`order_id`) AS `jumlah_order`,coalesce(round(sum(`o`.`total_harga`),2),0) AS `total_belanja` from (`customers` `c` left join `orders` `o` on(((`c`.`customer_id` = `o`.`customer_id`) and (`o`.`status` = 'selesai')))) group by `c`.`customer_id`,`c`.`nama`,`c`.`kota` */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -146,4 +310,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-04-17  3:48:00
+-- Dump completed on 2026-04-19 23:52:38

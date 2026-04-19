@@ -897,3 +897,66 @@ END //
 DELIMITER ;
 
 CALL sp_dashboard_summary();
+
+# ------------------------------------------------------------------------------------------------------------------
+
+# HARI 16
+
+# 1
+
+# View Order lengkap (4 Tabel Join)
+CREATE OR REPLACE VIEW vw_order_lengkap AS
+SELECT
+	o.order_id,
+    o.tanggal_order,
+    o.status,
+    o.total_harga AS total_order,
+    c.nama AS nama_customer,
+    c.kota,
+    p.nama_produk,
+    p.kategori,
+    oi.quantity,
+	oi.harga_satuan,
+    ROUND(oi.quantity * oi.harga_satuan, 2) AS subtotal_item 
+FROM orders AS o
+JOIN customers AS c ON o.customer_id = c.customer_id
+JOIN order_items AS oi ON o.order_id = oi.order_id
+JOIN products as p ON oi.product_id = p.product_id;
+
+-- Test 1: Lihat 5 baris pertama order lengkap
+SELECT * FROM vw_order_lengkap LIMIT 5;
+
+# View Summary Customer
+CREATE OR REPLACE VIEW vw_summary_customer AS
+SELECT
+	c.nama,
+    c.kota,
+    COUNT(o.order_id) AS jumlah_order,
+    COALESCE(ROUND(SUM(o.total_harga), 2), 0) AS total_belanja
+FROM customers AS c
+LEFT JOIN orders AS o ON c.customer_id = o.customer_id AND o.status = 'selesai'
+GROUP BY c.customer_id, c.nama, c.kota;
+
+-- Test 2: Lihat 5 customer dengan belanja tertinggi
+SELECT * FROM vw_summary_customer ORDER BY total_belanja DESC LIMIT 5;
+
+# View Performa Produk
+CREATE OR REPLACE VIEW vw_produk_performa AS
+SELECT
+	p.nama_produk,
+    p.kategori,
+    COALESCE(SUM(oi.quantity), 0) AS total_quantity_terjual,
+    COALESCE(ROUND(SUM(oi.quantity * oi.harga_satuan), 2), 0) AS total_revenue,
+    p.stok AS stok_tersisa,
+    CASE
+		WHEN p.stok = 0 THEN 'Habis'
+        WHEN p.stok < 20 THEN 'Menipis'
+        ELSE 'Aman'
+	END AS status_stok
+FROM products AS p
+LEFT JOIN order_items AS oi ON p.product_id = oi.product_id
+LEFT JOIN orders AS o ON oi.order_id = o.order_id AND o.status = 'selesai'
+GROUP BY p.product_id, p.nama_produk, p.kategori, p.stok;
+
+-- Test 3: Lihat 5 produk dengan revenue tertinggi
+SELECT * FROM vw_produk_performa ORDER BY total_revenue DESC LIMIT 5;
