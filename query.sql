@@ -960,3 +960,241 @@ GROUP BY p.product_id, p.nama_produk, p.kategori, p.stok;
 
 -- Test 3: Lihat 5 produk dengan revenue tertinggi
 SELECT * FROM vw_produk_performa ORDER BY total_revenue DESC LIMIT 5;
+
+
+# 2
+
+-- Buat tabel Log Aktivitas
+CREATE TABLE IF NOT EXISTS log_aktivitas (
+	log_id INT AUTO_INCREMENT PRIMARY KEY,
+    tabel_name VARCHAR(50) NOT NULL,
+    aksi VARCHAR(10) NOT NULL,
+    data_lama TEXT,
+    data_baru TEXT,
+    waktu DATETIME DEFAULT NOW(),
+    user_db VARCHAR(100)
+);
+
+-- 1. Cek log sebelum insert (harus kosong atau berisi log lama)
+SELECT * FROM log_aktivitas ORDER BY waktu DESC LIMIT 5;
+
+# Buat Trigger AFTER INSERT pada tabel orders
+DELIMITER //
+
+CREATE TRIGGER trg_audit_insert_orders
+AFTER INSERT ON orders
+FOR EACH ROW
+BEGIN
+	INSERT INTO log_aktivitas (tabel_name, aksi, data_lama, data_baru, waktu, user_db)
+    VALUES	(
+		'orders',
+        'INSERT',
+        NULL,
+        CONCAT('order_id:', NEW.order_id,
+				' | customer_id:', NEW.customer_id,
+                ' | status:', NEW.status,
+                ' | total_harga:', NEW.total_harga),
+		NOW(),
+        USER()
+	);
+END //
+
+DELIMITER ;
+
+-- 2. Insert order baru (memicu trigger otomatis)
+INSERT INTO orders (customer_id, tanggal_order, status, total_harga)
+VALUES (2, NOW(), 'pending', 1250000);
+
+-- 3. Cek log setelah insert (harus muncul 1 baris baru)
+SELECT * FROM log_aktivitas ORDER BY waktu DESC LIMIT 5;
+
+
+# 3
+
+-- Buat Trigger BEFORE UPDATE
+DELIMITER //
+
+CREATE TRIGGER trg_validate_lag_products
+BEFORE UPDATE ON products
+FOR EACH ROW
+BEGIN
+	-- Deklarasi variabel harus di paling awal blok BEGIN ... END
+    DECLARE err_msg VARCHAR(255);
+    
+	-- validasi 1: cegah stok negatif
+    IF NEW.stok < 0 THEN
+		SIGNAL SQLSTATE '45000'
+		SET MESSAGE_TEXT = 'Gagal Update: Stok produk tidak boleh bernilai negatif!';
+	END IF;
+    
+	-- validasi 2: cegah penurunan harga > 50%
+    IF NEW.harga < (OLD.harga * 0.5) THEN
+		-- simpan pesan dinamis ke variabel
+        SET err_msg = CONCAT('Gagal Update: Penurunan harga maksimal 50% dari harga lama (',
+							OLD.harga, '). Minimal harga baru: ', ROUND(OLD.harga * 0.5, 2));
+                            
+		-- baru panggil variabel di SIGNAL
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = err_msg;
+	END IF;
+    
+    -- logging: catat hanya jika harga benar-benar berubah
+    -- Gunakan <=> untuk aman jika kolom harga boleh NULL
+    IF NOT(NEW.harga <=> OLD.harga) THEN
+		INSERT INTO log_aktivitas (tabel_name, aksi, data_lama, data_baru, waktu, user_db)
+        VALUES (
+			'products',
+            'UPDATE',
+            CONCAT('product_id:', OLD.product_id, ' | harga_lama:', OLD.harga),
+            CONCAT('product_id:', NEW.product_id, ' | harga_baru:', NEW.harga),
+            NOW(),
+            USER()
+		);
+	END IF;
+END //
+
+DELIMITER ;
+
+-- Test 1: Update harga valid (turun 10%)
+UPDATE products SET harga = 90000 WHERE product_id = 1;
+-- Output: Query OK, 1 row affected. Cek log_aktivitas → 1 baris baru tercatat.
+
+-- ❌ Test 2: Update harga invalid (turun 60%)
+UPDATE products SET harga = 30000 WHERE product_id = 1;
+-- Output: Error 1644. "Gagal Update: Penurunan harga maksimal 50% dari harga lama (100000). Minimal harga baru: 50000.00"
+
+-- ❌ Test 3: Update stok negatif
+UPDATE products SET stok = -5 WHERE product_id = 1;
+-- Output: Error 1644. "Gagal Update: Stok produk tidak boleh bernilai negatif!"
+--  Cek Log Aktivitas
+
+
+SELECT * FROM log_aktivitas 
+WHERE tabel_name = 'products' 
+ORDER BY waktu DESC LIMIT 5;
+
+
+# 4
+
+-- Buat trigger BEFORE DELETE
+DELIMITER //
+
+CREATE TRIGGER trg_soft_delete_customer
+BEFORE DELETE ON customers
+FOR EACH ROW
+BEGIN
+	SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Direct DELETE tidak diizinkan. Gunakan sp_soft_delete_customer()';
+END//
+
+DELIMITER ;
+
+--  Test 1: Coba DELETE customer (akan terintercept trigger)
+DELETE FROM customers WHERE customer_id = 2;
+-- Output: Error 1644. "DELETE dibatalkan. Customer telah di-soft delete..."
+
+--  Cek apakah status berubah (tergantung engine DB, lihat catatan di bawah)
+SELECT customer_id, nama, is_active FROM customers WHERE customer_id = 101;
+
+DELIMITER //
+CREATE PROCEDURE sp_soft_delete_customer(IN p_customer_id INT)
+BEGIN
+    UPDATE customers SET is_active = 0 WHERE customer_id = p_customer_id;
+    
+    IF ROW_COUNT() = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Customer tidak ditemukan.';
+    END IF;
+END //
+DELIMITER ;
+
+-- Panggil dari aplikasi:
+CALL sp_soft_delete_customer(101);
+
+
+# 5
+
+-- 1️ TABEL LOG: Menyimpan riwayat alert stok
+DROP TRIGGER IF EXISTS trg_nama;
+DROP VIEW IF EXISTS vw_nama;
+CREATE TABLE IF NOT EXISTS stok_alert (
+    alert_id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    stok_sebelum INT,
+    stok_sesudah INT,
+    waktu_alert DATETIME DEFAULT NOW(),
+    status_alert VARCHAR(20) DEFAULT 'BELUM DITINDAK',
+    INDEX idx_prod_status (product_id, status_alert),
+    INDEX idx_waktu (waktu_alert)
+);
+
+-- 2️ VIEW: Real-time warning stok < 20
+CREATE OR REPLACE VIEW vw_stok_warning AS
+SELECT 
+    product_id,
+    nama_produk,
+    kategori,
+    stok,
+    CASE 
+        WHEN stok = 0 THEN 'Habis'
+        ELSE 'Menipis'
+    END AS status_stok
+FROM products
+WHERE stok >= 0 AND stok < 20;
+
+-- 3️ TRIGGER: Otomatis catat saat stok MENEMBUS batas 20
+DELIMITER //
+CREATE TRIGGER trg_monitor_stok_rendah
+AFTER UPDATE ON products
+FOR EACH ROW
+BEGIN
+    -- Hanya trigger saat stok BERUBAH dari >=20 menjadi <20
+    IF NEW.stok < 20 AND OLD.stok >= 20 THEN
+        INSERT INTO stok_alert (product_id, stok_sebelum, stok_sesudah, status_alert)
+        VALUES (NEW.product_id, OLD.stok, NEW.stok, 'BELUM DITINDAK');
+    END IF;
+END //
+DELIMITER ;
+
+-- Asumsi awal: product_id=50, nama='Kaos Polos', stok=30
+UPDATE products SET stok = 25 WHERE product_id = 50; 
+-- Tidak ada alert (masih >=20)
+
+UPDATE products SET stok = 15 WHERE product_id = 50; 
+-- Trigger FIRES! Alert tercatat di stok_alert (30 → 15)
+
+UPDATE products SET stok = 5 WHERE product_id = 50; 
+-- Tidak ada alert baru (threshold crossing logic mencegah spam)
+
+-- Cek View (real-time)
+SELECT * FROM vw_stok_warning WHERE product_id = 50;
+
+-- Cek Log Alert
+SELECT * FROM stok_alert WHERE product_id = 50 ORDER BY waktu_alert DESC;
+
+SELECT 
+    v.product_id,
+    v.nama_produk,
+    v.kategori,
+    v.stok AS stok_saat_ini,
+    v.status_stok,
+    a.stok_sebelum,
+    a.stok_sesudah,
+    a.waktu_alert,
+    a.status_alert,
+    -- Metrik tambahan: berapa hari sejak alert pertama
+    DATEDIFF(CURDATE(), a.waktu_alert) AS hari_sejak_alert
+FROM vw_stok_warning v
+LEFT JOIN stok_alert a ON v.product_id = a.product_id
+WHERE a.alert_id IS NULL OR a.alert_id = (
+    -- Ambil hanya alert TERBARU per produk agar dashboard tidak duplikat
+    SELECT MAX(alert_id) FROM stok_alert sa WHERE sa.product_id = v.product_id
+)
+ORDER BY v.stok ASC, a.waktu_alert DESC;
+
+-- Setelah buat trigger, verifikasi dengan:
+SHOW TRIGGERS FROM tokokita;
+
+-- Setelah buat view:
+SHOW FULL TABLES WHERE Table_type = 'VIEW';
+
+-- Melihat definisi view:
+SHOW CREATE VIEW vw_order_lengkap;

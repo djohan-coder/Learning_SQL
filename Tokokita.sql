@@ -45,6 +45,28 @@ LOCK TABLES `customers` WRITE;
 INSERT INTO `customers` VALUES (1,'Budi Baru','budi@gmail.com','Bali','2026-04-03','081234567891',1),(2,'Siti Rahayu','siti@gmail.com','Bandung','2026-04-03','082345678912',1),(3,'Andi Wijaya','andi@yahoo.com','Surabaya','2026-04-03','083456789123',1),(4,'Dewi Lestari','dewi@gmail.com','Yogyakarta','2026-04-03','085678901234',1),(5,'Reza Firmansyah','reza@gmail.com','Semarang','2026-04-03','087890123456',1),(6,'Maya Putri','maya@hotmail.com','Medan','2026-04-03',NULL,1),(7,'Fajar Nugroho','fajar@gmail.com','Makassar','2026-04-03',NULL,1),(8,'Rina Susanti','rina@yahoo.com','Palembang','2026-04-03',NULL,1),(9,'Hendra Gunawan','hendra@gmail.com','Balikpapan','2026-04-03',NULL,0),(10,'Putri Anjani','putri@gmail.com','Denpasar','2026-04-03',NULL,0);
 /*!40000 ALTER TABLE `customers` ENABLE KEYS */;
 UNLOCK TABLES;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_soft_delete_customer` BEFORE DELETE ON `customers` FOR EACH ROW BEGIN
+	-- 1. Ubah status jadi tidak aktif(soft delete)
+    UPDATE customers SET is_active = 0 WHERE customer_id = OLD.customer_id;
+    
+    -- 2. Batalkan proses DELETE asli & kirim pesan ke  client/aplikasi
+    SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'DELETE dibatalkan. Customer telah di-soft delete (is_active = 0). Gunakan UPDATE untuk perubahan status.';
+END */;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
 
 --
 -- Table structure for table `log_aktivitas`
@@ -62,7 +84,7 @@ CREATE TABLE `log_aktivitas` (
   `waktu` datetime DEFAULT CURRENT_TIMESTAMP,
   `user_db` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`log_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -71,6 +93,7 @@ CREATE TABLE `log_aktivitas` (
 
 LOCK TABLES `log_aktivitas` WRITE;
 /*!40000 ALTER TABLE `log_aktivitas` DISABLE KEYS */;
+INSERT INTO `log_aktivitas` VALUES (1,'orders','INSERT',NULL,'order_id:13 | customer_id:2 | status:pending | total_harga:1250000.00','2026-04-20 02:54:02','root@localhost');
 /*!40000 ALTER TABLE `log_aktivitas` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -124,7 +147,7 @@ CREATE TABLE `orders` (
   KEY `idx_orders_date_status_revenue` (`tanggal_order`,`status`,`total_harga`),
   KEY `idx_orders_status_date` (`status`,`tanggal_order`,`customer_id`),
   CONSTRAINT `fk_order_customers` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -133,7 +156,7 @@ CREATE TABLE `orders` (
 
 LOCK TABLES `orders` WRITE;
 /*!40000 ALTER TABLE `orders` DISABLE KEYS */;
-INSERT INTO `orders` VALUES (1,1,'2026-04-04 03:04:46','selesai',8500000.00),(2,2,'2026-04-04 03:04:46','selesai',250000.00),(3,3,'2026-04-04 03:04:46','selesai',750000.00),(4,4,'2026-04-04 03:04:46','selesai',2800000.00),(5,5,'2026-04-04 03:04:46','proses',85000.00),(6,6,'2026-04-04 03:04:46','proses',320000.00),(7,7,'2026-04-04 03:04:46','pending',450000.00),(8,8,'2026-04-04 03:04:46','pending',380000.00);
+INSERT INTO `orders` VALUES (1,1,'2026-04-04 03:04:46','selesai',8500000.00),(2,2,'2026-04-04 03:04:46','selesai',250000.00),(3,3,'2026-04-04 03:04:46','selesai',750000.00),(4,4,'2026-04-04 03:04:46','selesai',2800000.00),(5,5,'2026-04-04 03:04:46','proses',85000.00),(6,6,'2026-04-04 03:04:46','proses',320000.00),(7,7,'2026-04-04 03:04:46','pending',450000.00),(8,8,'2026-04-04 03:04:46','pending',380000.00),(13,2,'2026-04-20 02:54:02','pending',1250000.00);
 /*!40000 ALTER TABLE `orders` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!50003 SET @saved_cs_client      = @@character_set_client */ ;
@@ -192,6 +215,75 @@ LOCK TABLES `products` WRITE;
 INSERT INTO `products` VALUES (1,'Laptop Asus VivoBook','Elektronik',8500000.00,12),(2,'Mouse Wireless Logitech','Elektronik',250000.00,45),(3,'Keyboard Mechanical','Elektronik',750000.00,26),(4,'Monitor 24 inch','Elektronik',2800000.00,18),(5,'Kaos Polos Cotton','Fashion',97750.00,96),(6,'Celana Jeans Slim','Fashion',368000.00,57),(7,'Sepatu Sneakers','Fashion',517500.00,36),(8,'Blender Philips','Rumah Tangga',380000.00,24),(9,'Rice Cooker Miyako','Rumah Tangga',280000.00,34),(10,'Dispenser Galon','Rumah Tangga',420000.00,18);
 /*!40000 ALTER TABLE `products` ENABLE KEYS */;
 UNLOCK TABLES;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_validate_lag_products` BEFORE UPDATE ON `products` FOR EACH ROW BEGIN
+	-- Deklarasi variabel harus di paling awal blok BEGIN ... END
+    DECLARE err_msg VARCHAR(255);
+    
+	-- validasi 1: cegah stok negatif
+    IF NEW.stok < 0 THEN
+		SIGNAL SQLSTATE '45000'
+		SET MESSAGE_TEXT = 'Gagal Update: Stok produk tidak boleh bernilai negatif!';
+	END IF;
+    
+	-- validasi 2: cegah penurunan harga > 50%
+    IF NEW.harga < (OLD.harga * 0.5) THEN
+		-- simpan pesan dinamis ke variabel
+        SET err_msg = CONCAT('Gagal Update: Penurunan harga maksimal 50% dari harga lama (',
+							OLD.harga, '). Minimal harga baru: ', ROUND(OLD.harga * 0.5, 2));
+                            
+		-- baru panggil variabel di SIGNAL
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = err_msg;
+	END IF;
+    
+    -- logging: catat hanya jika harga benar-benar berubah
+    -- Gunakan <=> untuk aman jika kolom harga boleh NULL
+    IF NOT(NEW.harga <=> OLD.harga) THEN
+		INSERT INTO log_aktivitas (tabel_name, aksi, data_lama, data_baru, waktu, user_db)
+        VALUES (
+			'products',
+            'UPDATE',
+            CONCAT('product_id:', OLD.product_id, ' | harga_lama:', OLD.harga),
+            CONCAT('product_id:', NEW.product_id, ' | harga_baru:', NEW.harga),
+            NOW(),
+            USER()
+		);
+	END IF;
+END */;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_monitor_stok_rendah` AFTER UPDATE ON `products` FOR EACH ROW BEGIN
+    -- Hanya trigger saat stok BERUBAH dari >=20 menjadi <20
+    IF NEW.stok < 20 AND OLD.stok >= 20 THEN
+        INSERT INTO stok_alert (product_id, stok_sebelum, stok_sesudah, status_alert)
+        VALUES (NEW.product_id, OLD.stok, NEW.stok, 'BELUM DITINDAK');
+    END IF;
+END */;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
 
 --
 -- Temporary view structure for view `vw_order_lengkap`
@@ -310,4 +402,4 @@ SET character_set_client = @saved_cs_client;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-04-19 23:52:38
+-- Dump completed on 2026-04-20  3:26:48
