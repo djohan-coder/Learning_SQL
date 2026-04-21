@@ -286,6 +286,41 @@ DELIMITER ;
 /*!50003 SET collation_connection  = @saved_col_connection */ ;
 
 --
+-- Temporary view structure for view `vw_kinerja_customer`
+--
+
+DROP TABLE IF EXISTS `vw_kinerja_customer`;
+/*!50001 DROP VIEW IF EXISTS `vw_kinerja_customer`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `vw_kinerja_customer` AS SELECT 
+ 1 AS `customer_id`,
+ 1 AS `nama`,
+ 1 AS `kota`,
+ 1 AS `recency`,
+ 1 AS `frequency`,
+ 1 AS `monetary`,
+ 1 AS `segmen_rfm`*/;
+SET character_set_client = @saved_cs_client;
+
+--
+-- Temporary view structure for view `vw_kinerja_produk`
+--
+
+DROP TABLE IF EXISTS `vw_kinerja_produk`;
+/*!50001 DROP VIEW IF EXISTS `vw_kinerja_produk`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `vw_kinerja_produk` AS SELECT 
+ 1 AS `product_id`,
+ 1 AS `nama_produk`,
+ 1 AS `kategori`,
+ 1 AS `total_qty_terjual`,
+ 1 AS `total_revenue`,
+ 1 AS `rangking_per_kategori`*/;
+SET character_set_client = @saved_cs_client;
+
+--
 -- Temporary view structure for view `vw_order_lengkap`
 --
 
@@ -340,6 +375,79 @@ SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = @saved_cs_client;
 
 --
+-- Temporary view structure for view `vw_transaksi_lengkap`
+--
+
+DROP TABLE IF EXISTS `vw_transaksi_lengkap`;
+/*!50001 DROP VIEW IF EXISTS `vw_transaksi_lengkap`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `vw_transaksi_lengkap` AS SELECT 
+ 1 AS `kode_order`,
+ 1 AS `nama_customer_kota`,
+ 1 AS `nama_produk_kategori`,
+ 1 AS `harga_rupiah`,
+ 1 AS `quantity`,
+ 1 AS `subtotal_item`,
+ 1 AS `tanggal_order`,
+ 1 AS `status`*/;
+SET character_set_client = @saved_cs_client;
+
+--
+-- Temporary view structure for view `vw_tren_bulanan`
+--
+
+DROP TABLE IF EXISTS `vw_tren_bulanan`;
+/*!50001 DROP VIEW IF EXISTS `vw_tren_bulanan`*/;
+SET @saved_cs_client     = @@character_set_client;
+/*!50503 SET character_set_client = utf8mb4 */;
+/*!50001 CREATE VIEW `vw_tren_bulanan` AS SELECT 
+ 1 AS `periode`,
+ 1 AS `jumlah_order`,
+ 1 AS `total_revenue`,
+ 1 AS `average_order_value`,
+ 1 AS `revenue_bulan_lalu`,
+ 1 AS `pertumbuhan_persen`,
+ 1 AS `running_total`*/;
+SET character_set_client = @saved_cs_client;
+
+--
+-- Final view structure for view `vw_kinerja_customer`
+--
+
+/*!50001 DROP VIEW IF EXISTS `vw_kinerja_customer`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `vw_kinerja_customer` AS select `c`.`customer_id` AS `customer_id`,`c`.`nama` AS `nama`,`c`.`kota` AS `kota`,coalesce((to_days(curdate()) - to_days(max(`o`.`tanggal_order`))),999) AS `recency`,count(`o`.`order_id`) AS `frequency`,coalesce(round(sum(`o`.`total_harga`),2),0) AS `monetary`,(case when ((coalesce((to_days(curdate()) - to_days(max(`o`.`tanggal_order`))),999) <= 30) and (count(`o`.`order_id`) >= 2)) then 'Champion' when (count(`o`.`order_id`) >= 2) then 'Loyal' when (coalesce((to_days(curdate()) - to_days(max(`o`.`tanggal_order`))),999) > 60) then 'At Risk' else 'Regular' end) AS `segmen_rfm` from (`customers` `c` left join `orders` `o` on(((`c`.`customer_id` = `o`.`customer_id`) and (`o`.`status` = 'selesai')))) group by `c`.`customer_id`,`c`.`nama`,`c`.`kota` */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
+
+--
+-- Final view structure for view `vw_kinerja_produk`
+--
+
+/*!50001 DROP VIEW IF EXISTS `vw_kinerja_produk`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `vw_kinerja_produk` AS select `product_agg`.`product_id` AS `product_id`,`product_agg`.`nama_produk` AS `nama_produk`,`product_agg`.`kategori` AS `kategori`,`product_agg`.`total_qty_terjual` AS `total_qty_terjual`,`product_agg`.`total_revenue` AS `total_revenue`,rank() OVER (PARTITION BY `product_agg`.`kategori` ORDER BY `product_agg`.`total_revenue` desc )  AS `rangking_per_kategori` from (select `p`.`product_id` AS `product_id`,`p`.`nama_produk` AS `nama_produk`,`p`.`kategori` AS `kategori`,coalesce(sum(`oi`.`quantity`),0) AS `total_qty_terjual`,coalesce(round(sum((`oi`.`quantity` * `oi`.`harga_satuan`)),2),0) AS `total_revenue` from ((`products` `p` left join `order_items` `oi` on((`p`.`product_id` = `oi`.`product_id`))) left join `orders` `o` on(((`oi`.`order_id` = `o`.`order_id`) and (`o`.`status` = 'selesai')))) group by `p`.`product_id`,`p`.`nama_produk`,`p`.`kategori`) `product_agg` */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
+
+--
 -- Final view structure for view `vw_order_lengkap`
 --
 
@@ -392,6 +500,42 @@ SET character_set_client = @saved_cs_client;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
+
+--
+-- Final view structure for view `vw_transaksi_lengkap`
+--
+
+/*!50001 DROP VIEW IF EXISTS `vw_transaksi_lengkap`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `vw_transaksi_lengkap` AS select concat('ORD-',lpad(`o`.`order_id`,4,'0')) AS `kode_order`,concat(`c`.`nama`,' (',`c`.`kota`,')') AS `nama_customer_kota`,concat(`p`.`nama_produk`,' [',`p`.`kategori`,']') AS `nama_produk_kategori`,concat('Rp ',replace(format(`oi`.`harga_satuan`,2),',','.')) AS `harga_rupiah`,`oi`.`quantity` AS `quantity`,round((`oi`.`quantity` * `oi`.`harga_satuan`),2) AS `subtotal_item`,`o`.`tanggal_order` AS `tanggal_order`,`o`.`status` AS `status` from (((`orders` `o` join `customers` `c` on((`o`.`customer_id` = `c`.`customer_id`))) join `order_items` `oi` on((`o`.`order_id` = `oi`.`order_id`))) join `products` `p` on((`oi`.`product_id` = `p`.`product_id`))) */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
+
+--
+-- Final view structure for view `vw_tren_bulanan`
+--
+
+/*!50001 DROP VIEW IF EXISTS `vw_tren_bulanan`*/;
+/*!50001 SET @saved_cs_client          = @@character_set_client */;
+/*!50001 SET @saved_cs_results         = @@character_set_results */;
+/*!50001 SET @saved_col_connection     = @@collation_connection */;
+/*!50001 SET character_set_client      = utf8mb4 */;
+/*!50001 SET character_set_results     = utf8mb4 */;
+/*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `vw_tren_bulanan` AS select concat(`monthly_agg`.`tahun`,'-',lpad(`monthly_agg`.`bulan`,2,'0')) AS `periode`,`monthly_agg`.`jumlah_order` AS `jumlah_order`,`monthly_agg`.`total_revenue` AS `total_revenue`,round(`monthly_agg`.`aov`,2) AS `average_order_value`,`monthly_agg`.`revenue_bulan_lalu` AS `revenue_bulan_lalu`,(case when ((`monthly_agg`.`revenue_bulan_lalu` is null) or (`monthly_agg`.`revenue_bulan_lalu` = 0)) then NULL else round((((`monthly_agg`.`total_revenue` - `monthly_agg`.`revenue_bulan_lalu`) / `monthly_agg`.`revenue_bulan_lalu`) * 100),2) end) AS `pertumbuhan_persen`,`monthly_agg`.`running_total` AS `running_total` from (select year(`orders`.`tanggal_order`) AS `tahun`,month(`orders`.`tanggal_order`) AS `bulan`,count(`orders`.`order_id`) AS `jumlah_order`,coalesce(sum(`orders`.`total_harga`),0) AS `total_revenue`,coalesce(avg(`orders`.`total_harga`),0) AS `aov`,lag(sum(`orders`.`total_harga`)) OVER (ORDER BY year(`orders`.`tanggal_order`),month(`orders`.`tanggal_order`) )  AS `revenue_bulan_lalu`,sum(sum(`orders`.`total_harga`)) OVER (ORDER BY year(`orders`.`tanggal_order`),month(`orders`.`tanggal_order`) ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)  AS `running_total` from `orders` where (`orders`.`status` = 'selesai') group by year(`orders`.`tanggal_order`),month(`orders`.`tanggal_order`)) `monthly_agg` */;
+/*!50001 SET character_set_client      = @saved_cs_client */;
+/*!50001 SET character_set_results     = @saved_cs_results */;
+/*!50001 SET collation_connection      = @saved_col_connection */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -402,4 +546,4 @@ SET character_set_client = @saved_cs_client;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-04-20  3:26:48
+-- Dump completed on 2026-04-21 23:28:04

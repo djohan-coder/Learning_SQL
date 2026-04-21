@@ -1198,3 +1198,126 @@ SHOW FULL TABLES WHERE Table_type = 'VIEW';
 
 -- Melihat definisi view:
 SHOW CREATE VIEW vw_order_lengkap;
+
+#---------------------------------------------------------------------------------
+
+# HARI 17
+
+#1
+-- 1. view_transaksi_lengkap
+CREATE OR REPLACE VIEW vw_transaksi_lengkap AS
+SELECT
+	CONCAT('ORD-', LPAD(o.order_id, 4, '0')) AS kode_order,
+    CONCAT(c.nama, ' (', c.kota, ')')		AS nama_customer_kota,
+    CONCAT(p.nama_produk, ' [', p.kategori, ']') AS nama_produk_kategori,
+    CONCAT('Rp ', REPLACE(FORMAT(oi.harga_satuan, 2), ',','.')) AS harga_rupiah,
+    oi.quantity,
+    ROUND(oi.quantity * oi.harga_satuan, 2) AS subtotal_item,
+    o.tanggal_order,
+    o.status
+FROM orders AS o
+JOIN customers AS c ON o.customer_id = c.customer_id
+JOIN order_items AS oi ON o.order_id = oi.order_id
+JOIN products AS p ON oi.product_id = p.product_id;
+
+-- 1. Transaksi Lengkap (sample 5 baris)
+SELECT kode_order, nama_customer_kota, harga_rupiah, subtotal_item 
+FROM vw_transaksi_lengkap LIMIT 5;
+
+-- 2. vw_kinerja_customer
+CREATE OR REPLACE VIEW vw_kinerja_customer AS
+SELECT
+	c.customer_id,
+    c.nama,
+    c.kota,
+    COALESCE(DATEDIFF(CURDATE(), MAX(o.tanggal_order)), 999) AS recency,
+    COUNT(o.order_id) AS frequency,
+    COALESCE(ROUND(SUM(o.total_harga), 2), 0) AS monetary,
+    CASE
+		WHEN COALESCE(DATEDIFF(CURDATE(), MAX(o.tanggal_order)), 999) <= 30 AND COUNT(o.order_id) >= 2 THEN 'Champion'
+        WHEN COUNT(o.order_id) >= 2 THEN 'Loyal'
+        WHEN COALESCE(DATEDIFF(CURDATE(), MAX(o.tanggal_order)), 999) > 60 THEN 'At Risk'
+        ELSE 'Regular'
+	END AS segmen_rfm
+FROM customers AS c
+LEFT JOIN orders AS o ON c.customer_id = o.customer_id AND o.status = 'selesai'
+GROUP BY c.customer_id, c.nama, c.kota;
+
+-- 2. Performa Customer (top 5 berdasarkan monetary)
+SELECT nama, kota, recency, frequency, monetary, segmen_rfm
+FROM vw_kinerja_customer ORDER BY monetary DESC LIMIT 5;
+
+-- 3. vw_kinerja_produk
+CREATE OR REPLACE VIEW vw_kinerja_produk AS
+SELECT
+	product_id,
+    nama_produk,
+    kategori,
+    total_qty_terjual,
+    total_revenue,
+    RANK() OVER (PARTITION BY kategori ORDER BY total_revenue DESC) AS rangking_per_kategori
+FROM (
+	SELECT
+		p.product_id,
+		p.nama_produk,
+		p.kategori,
+		COALESCE(SUM(oi.quantity), 0) AS total_qty_terjual,
+		COALESCE(ROUND(SUM(oi.quantity * oi.harga_satuan), 2), 0) AS total_revenue
+	FROM products AS p
+	LEFT JOIN order_items AS oi ON p.product_id = oi.product_id
+	LEFT JOIN orders AS o ON oi.order_id = o.order_id AND o.status = 'selesai'
+	GROUP BY p.product_id, p.nama_produk, p.kategori
+) AS product_agg;
+
+-- 3. Performa Produk (ranking per kategori)
+SELECT nama_produk, kategori, total_revenue, rangking_per_kategori
+FROM vw_kinerja_produk ORDER BY kategori, rangking_per_kategori;
+
+-- hapus view
+DROP VIEW IF EXISTS view_kinerja_produk;
+
+-- 4. vw_tren_bulanan
+CREATE OR REPLACE VIEW vw_tren_bulanan AS
+SELECT
+	CONCAT(tahun, '-', LPAD(bulan, 2, '0')) AS periode,
+    jumlah_order,
+    total_revenue,
+    ROUND(aov, 2) AS average_order_value,
+    revenue_bulan_lalu,
+    CASE
+		WHEN revenue_bulan_lalu IS NULL OR revenue_bulan_lalu = 0 THEN NULL
+        ELSE ROUND((total_revenue - revenue_bulan_lalu) / revenue_bulan_lalu * 100, 2)
+	END AS pertumbuhan_persen,
+    running_total
+FROM (
+	SELECT
+		YEAR(tanggal_order) AS tahun,
+        MONTH(tanggal_order) AS bulan,
+        COUNT(order_id) AS jumlah_order,
+        COALESCE(SUM(total_harga), 0) AS total_revenue,
+        COALESCE(AVG(total_harga), 0) AS aov,
+        LAG(SUM(total_harga)) OVER (ORDER BY YEAR(tanggal_order), MONTH(tanggal_order)) AS revenue_bulan_lalu,
+        SUM(SUM(total_harga)) OVER (ORDER BY YEAR(tanggal_order), MONTH(tanggal_order) ROWS UNBOUNDED PRECEDING) AS running_total
+	FROM orders
+    WHERE status = 'selesai'
+    GROUP BY YEAR(tanggal_order), MONTH(tanggal_order)
+) AS monthly_agg;
+
+-- 4. Tren Bulanan
+SELECT periode, total_revenue, pertumbuhan_persen, running_total
+FROM vw_tren_bulanan ORDER BY periode;
+
+# VIEW bersifat virtual (tidak menyimpan data). 
+# Setiap SELECT dari view akan menjalankan query dasar. Agar responsif di tabel >100k baris, buat index berikut:
+
+CREATE INDEX idx_orders_cust_status ON orders(customer_id, status, tanggal_order, total_harga);
+CREATE INDEX idx_oi_order_prod ON order_items(order_id, product_id, qty, harga_satuan);
+CREATE INDEX idx_products_kategori ON products(product_id, kategori, harga);
+CREATE INDEX idx_customers_id ON customers(customer_id, nama, kota);
+
+
+
+
+
+
+
