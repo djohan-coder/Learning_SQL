@@ -1316,8 +1316,233 @@ CREATE INDEX idx_products_kategori ON products(product_id, kategori, harga);
 CREATE INDEX idx_customers_id ON customers(customer_id, nama, kota);
 
 
+#2
+
+-- 1. TABEL AUDIT LOG
+CREATE TABLE IF NOT EXISTS audit_log (
+	log_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tabel_name VARCHAR(50) NOT NULL,
+    operasi VARCHAR(20) NOT NULL,
+    record_id INT NOT NULL,
+    data_sebelum JSON,
+    data_sesudah JSON,
+    waktu DATETIME DEFAULT NOW(),
+    user_db VARCHAR(100) DEFAULT SUBSTRING_INDEX(USER(), '@', -1),
+    ip_info VARCHAR(45)
+);
+
+-- 2. TRIGGER AFTER INSERT ON orders
+
+DELIMITER //
+CREATE TRIGGER trg_audit_insert_orders
+AFTER INSERT ON orders
+FOR EACH ROW
+BEGIN
+	INSERT INTO audit_log (tabel_name, operasi, record_id, data_sebelum, data_sesudah, ip_info)
+    VALUES (
+		'orders',
+        'INSERT',
+        NEW.order_id,
+        NULL,
+        JSON_OBJECT('customer_id', NEW.customer_id, 'status', NEW.status, 'total_harga', NEW.total_harga, 'tanggal_order', NEW.tanggal_order),
+        SUBSTRING_INDEX(USER(), '@', -1)
+	);
+END //
+DELIMITER ;
+
+-- 3. TRIGGER AFTER UPDATE ON orders (Hanya Log perubahan status)
+DELIMITER //
+CREATE TRIGGER trg_audit_update_orders
+AFTER UPDATE ON orders
+FOR EACH ROW
+BEGIN
+	-- Gunakan <=> untuk safe NULL comparison
+    IF NOT (OLD.status <=> NEW.status) THEN
+		INSERT INTO audit_log (table_name, operasi, record_id, data_sebelu, data_sesudah, ip_info)
+		VALUES (
+			'orders',
+			'UPDATE STATUS',
+			NEW.order_id,
+			JSON_OBJECT('status_lama', OLD.status),
+			JSON_OBJECT('status_baru', NEW.harga, 'waktu_update', NOW()),
+			SUBSTRING_INDEX(USER(), '@', -1)
+		);
+	END IF;
+END //
+DELIMITER ;
+
+-- 4. TRIGGER AFTER UPDATE ON products (Hanya Log perubahan harga/stok)
+DELIMITER //
+CREATE TRIGGER trg_audit_update_products
+AFTER UPDATE ON products
+FOR EACH ROW
+BEGIN
+	IF NOT (OLD.harga <=> NEW.harga) OR NOT (OLD.stok <=> NEW.stok) THEN
+		INSERT INTO audit_log (tabel_name, operasi, record_id, data_sebelum, data_sesudah, ip_info)
+        VALUES (
+			'products',
+            'UPDATE_PRICE_STOCK',
+            NEW.product_id,
+            JSON_OBJECT('harga_lama', OLD.harga, 'stok_lama', OLD.stok),
+            JSON_OBJECT('harga_baru', NEW.harga, 'stok_baru', NEW.stok, 'waktu_update', NOW()),
+            SUBSTRING_INDEX(USER(), '@', -1)
+		);
+	END IF;
+END //
+DELIMITER ;
+
+-- Query verifikasi (10 log terbaru format rapi)
+SELECT 
+    log_id,
+    tabel_name,
+    operasi,
+    record_id,
+    COALESCE(CAST(data_sebelum AS CHAR), 'NULL') AS data_sebelum,
+    COALESCE(CAST(data_sesudah AS CHAR), 'NULL') AS data_sesudah,
+    DATE_FORMAT(waktu, '%d/%m/%Y %H:%i:%s') AS waktu,
+    user_db,
+    COALESCE(ip_info, 'LOCALHOST') AS ip_info
+FROM audit_log
+ORDER BY log_id DESC
+LIMIT 10;
+
+-- ✅ Test 1: Insert Order Baru
+INSERT INTO orders (customer_id, tanggal_order, status, total_harga) 
+VALUES (101, NOW(), 'pending', 1250000);
+
+-- ✅ Test 2: Update Status Order
+UPDATE orders SET status = 'selesai' WHERE order_id = LAST_INSERT_ID();
+
+-- ✅ Test 3: Update Harga Produk
+UPDATE products SET harga = 85000 WHERE product_id = 1;
+
+-- ✅ Test 4: Update Stok Produk
+UPDATE products SET stok = 15 WHERE product_id = 1;
+
+-- 🔍 Cek Hasil Audit
+SELECT * FROM audit_log ORDER BY log_id DESC LIMIT 4;
 
 
+# 3
 
+DELIMITER //
 
+-- 1.PROSES ORDER BARU (Transaksi + Update Stok)
+CREATE PROCEDURE sp_proses_order_baru(
+	IN p_customer_id INT,
+    IN p_product_id INT,
+    IN p_qty INT,
+    OUT p_order_id INT,
+    OUT p_total DECIMAL(12,2)
+)
+BEGIN
+	DECLARE v_harga DECIMAL(12,2);
+    DECLARE v_stok INT;
+    
+    -- Rollback otomatis jika terjadi error tak terduga
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+		ROLLBACK;
+        RESIGNAL;
+	END;
+    
+    START TRANSACTION;
+    
+    -- Kunci baris produk untuk menghindari race condition
+    SELECT stok, harga INTO v_stok, v_harga
+    FROM products WHERE product_id = p_product_id FOR UPDATE;
+    
+    IF v_stok IS NULL THEN
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Produk tidak ditemukan!';
+	END IF;
+    IF p_qty <= 0 THEN
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Qty harus lebih dari 0!';
+	END IF;
+    IF v_stok < p_qty THEN
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = CONCAT('Stok tidak mencukupi! Tersedia: ', v_stok);
+	END IF;
+    
+    -- Hitung total & buat order
+    SET p_total = v_harga * p_qty;
+    
+    INSERT INTO orders (customer_id, tanggal_order, status, total_harga)
+    VALUES (p_customer_id, NOW(), 'pending', p_total);
+    
+    SET p_order_id = LAST_INSERT_ID();
+    
+    INSERT INTO order_items (order_id, product_id, qty, harga_satuan)
+    VALUES (p_order_id, p_product_id, p_qty, v_harga);
+    
+    -- Kurang stok
+    UPDATE products SET stok = stok - p_qty WHERE product_id = p_product_id;
+    
+    COMMIT;
+END //
 
+-- 2. LAPORAN PERIODE (Revenue, AOV, Produk Terlaris)
+CREATE PROCEDURE sp_laporan_periode(
+	IN p_tgl_awal DATE,
+    IN p_tgl_akhir DATE
+)
+BEGIN
+	IF p_tgl_awal > p_tgl_akhir THEN
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Tanggal awal tidak boleh besar dari tanggal tanggal akhir!';
+	END IF;
+    
+    SELECT
+		COUNT(o.order_id) AS jumlah_order,
+        COALESCE(ROUND(SUM(o.total_harga), 2), 0) AS total_revenue,
+        COALESCE(ROUND(AVG(o.total_harga), 2), 0) AS aov,
+        COALESCE((
+			SELECT(CONCAT(p.nama_produk, ' (', SUM(oi.quantity), 'unit)')
+            FROM order_items AS oi
+            JOIN orders AS o2 ON oi.order_id = o2.order_id
+            JOIN products AS p ON oi.product_id = p.product_id
+            WHERE	o2.status = 'selesai'
+				AND	o2.tanggal_order BETWEEN p_tgl_awal AND p_tgl_akhir
+			GROUP BY p.product_id, p.nama_produk
+            ORDER BY SUM(oi.quantity) DESC
+            LIMIT = 1
+		), 'Tidak ada data') AS produk_terlaris
+	FROM orders AS o
+    WHERE	o.status = 'selesai'
+	AND		o.tanggal_order BETWEEN p_tgl_awal AND p_tgl_akhir;
+END //
+
+-- 3. UPDATE STATUS DENGAN VALIDASI TRANSISI (State Machine)
+CREATE PROCEDURE sp_update_status_order(
+	IN p_order_id INT,
+    IN p_status_baru VARCHAR(20)
+)
+BEGIN
+	DECLARE v_status_lama VARCHAR(20);
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+		ROLLBACK;
+        RESIGNAL;
+	END;
+    
+    START TRANSACTION;
+    
+    -- kunci order untuk update aman
+    SELECT status INTO v_status_lama
+    FROM orders WHERE order_id = p_order_id FOR UPDATE;
+    
+    IF v_status_lama IS NULL THEN
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Status sudah sama, tidak perlu update!';
+	END IF;
+    
+    -- Validasi teransisi ketat: pending -> diproses -> selesai
+    IF v_status_lama = 'pending' AND p_status_baru = 'diproses' THEN
+		UPDATE orders SET status = p_status_baru WHERE order_id = p_order_id;
+	ELSEIF v_status_lama = 'diproses' AND p_status_baru = 'selesai' THEN
+		UPDATE orders SET status = p_status_baru WHERE order_id = p_order_id;
+	ELSE
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transisi status tidak valid! Hanya boleh: pending -> diproses -> selesai';
+	END IF;
+    
+    COMMIT;
+END //
+
+DELIMITER ;
