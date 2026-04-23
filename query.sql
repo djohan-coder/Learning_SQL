@@ -1203,7 +1203,10 @@ SHOW CREATE VIEW vw_order_lengkap;
 
 # HARI 17
 
-# MODUL 1 INFRASTRUKTUR VIEW
+-- ============================================================
+-- MODUL 1: INFRASTRUKTUR VIEW
+-- ============================================================
+
 -- 1. view_transaksi_lengkap
 DROP VIEW IF EXISTS vw_transaksi_lengkap;
 CREATE OR REPLACE VIEW vw_transaksi_lengkap AS
@@ -1257,116 +1260,120 @@ ORDER BY monetary DESC
 LIMIT 5;
 
 
--- 3. vw_kinerja_produk
-CREATE OR REPLACE VIEW vw_kinerja_produk AS
+-- VIEW 3: Kinerja Produk (Revenue + Ranking per Kategori)
+DROP VIEW IF EXISTS vw_kinerja_produk;
+CREATE VIEW vw_kinerja_produk AS
 SELECT
 	product_id,
     nama_produk,
     kategori,
     total_qty_terjual,
     total_revenue,
-    RANK() OVER (PARTITION BY kategori ORDER BY total_revenue DESC) AS rangking_per_kategori
+    RANK() OVER (PARTITION BY kategori ORDER BY total_revenue DESC) AS ranking_per_kategori
 FROM (
 	SELECT
 		p.product_id,
 		p.nama_produk,
 		p.kategori,
-		COALESCE(SUM(oi.quantity), 0) AS total_qty_terjual,
-		COALESCE(ROUND(SUM(oi.quantity * oi.harga_satuan), 2), 0) AS total_revenue
+		COALESCE(SUM(oi.quantity), 0)								AS total_qty_terjual,
+		COALESCE(ROUND(SUM(oi.quantity * oi.harga_satuan), 2), 0)	AS total_revenue
 	FROM products AS p
-	LEFT JOIN order_items AS oi ON p.product_id = oi.product_id
-	LEFT JOIN orders AS o ON oi.order_id = o.order_id AND o.status = 'selesai'
+	LEFT JOIN order_items	AS oi	ON p.product_id = oi.product_id
+	LEFT JOIN orders		AS o	ON oi.order_id = o.order_id
+									AND o.status = 'selesai'
 	GROUP BY p.product_id, p.nama_produk, p.kategori
 ) AS product_agg;
 
--- 3. Performa Produk (ranking per kategori)
-SELECT nama_produk, kategori, total_revenue, rangking_per_kategori
-FROM vw_kinerja_produk ORDER BY kategori, rangking_per_kategori;
+-- Test VIEW 3
+SELECT nama_produk, kategori, total_revenue, ranking_per_kategori
+FROM vw_kinerja_produk
+ORDER BY kategori, ranking_per_kategori;
 
--- 4. vw_tren_bulanan
-CREATE OR REPLACE VIEW vw_tren_bulanan AS
+-- VIEW 4: Tren Bulanan (LAG + Running Total + Growth)
+DROP VIEW vw_tren_bulanan;
+CREATE VIEW vw_tren_bulanan AS
 SELECT
-	CONCAT(tahun, '-', LPAD(bulan, 2, '0')) AS periode,
+	CONCAT(tahun, '-', LPAD(bulan, 2, '0'))		AS periode,
     jumlah_order,
     total_revenue,
-    ROUND(aov, 2) AS average_order_value,
+    ROUND(aov, 2)								AS average_order_value,
     revenue_bulan_lalu,
     CASE
-		WHEN revenue_bulan_lalu IS NULL OR revenue_bulan_lalu = 0 THEN NULL
-        ELSE ROUND((total_revenue - revenue_bulan_lalu) / revenue_bulan_lalu * 100, 2)
-	END AS pertumbuhan_persen,
-    running_total
+		WHEN revenue_bulan_lalu IS NULL
+		OR revenue_bulan_lalu = 0				THEN NULL
+        ELSE ROUND(
+			(total_revenue - revenue_bulan_lalu)
+            / revenue_bulan_lalu * 100, 2)
+	END											AS pertumbuhan_persen,
+    ROUND(running_total, 2)						AS running_total
 FROM (
 	SELECT
-		YEAR(tanggal_order) AS tahun,
-        MONTH(tanggal_order) AS bulan,
-        COUNT(order_id) AS jumlah_order,
-        COALESCE(SUM(total_harga), 0) AS total_revenue,
-        COALESCE(AVG(total_harga), 0) AS aov,
-        LAG(SUM(total_harga)) OVER (ORDER BY YEAR(tanggal_order), MONTH(tanggal_order)) AS revenue_bulan_lalu,
-        SUM(SUM(total_harga)) OVER (ORDER BY YEAR(tanggal_order), MONTH(tanggal_order) ROWS UNBOUNDED PRECEDING) AS running_total
+		YEAR(tanggal_order)										AS tahun,
+        MONTH(tanggal_order)									AS bulan,
+        COUNT(order_id)											AS jumlah_order,
+        COALESCE(SUM(total_harga), 0)							AS total_revenue,
+        COALESCE(AVG(total_harga), 0)							AS aov,
+        LAG(SUM(total_harga)) OVER (
+			ORDER BY YEAR(tanggal_order), MONTH(tanggal_order)
+		)														AS revenue_bulan_lalu,
+        SUM(SUM(total_harga)) OVER (
+			ORDER BY YEAR(tanggal_order), MONTH(tanggal_order)
+            ROWS UNBOUNDED PRECEDING)							AS running_total
 	FROM orders
     WHERE status = 'selesai'
     GROUP BY YEAR(tanggal_order), MONTH(tanggal_order)
 ) AS monthly_agg;
 
--- 4. Tren Bulanan
+-- Test VIEW 4
 SELECT periode, total_revenue, pertumbuhan_persen, running_total
-FROM vw_tren_bulanan ORDER BY periode;
+FROM vw_tren_bulanan
+ORDER BY periode;
 
 -- -----------------------------------------------------------------
--- hapus view
-DROP VIEW IF EXISTS vw_kinerja_produk;
--- Cek semua view di database aktif
-SHOW FULL TABLES WHERE  = 'vw_transaksi_lengkap';
-
--- Cek definisi View tertentu
-SHOW CREATE VIEW vw_transaksi_lengkap;
-
-# VIEW bersifat virtual (tidak menyimpan data). 
-# Setiap SELECT dari view akan menjalankan query dasar. Agar responsif di tabel >100k baris, buat index berikut:
-
-CREATE INDEX idx_orders_cust_status ON orders(customer_id, status, tanggal_order, total_harga);
-CREATE INDEX idx_oi_order_prod ON order_items(order_id, product_id, qty, harga_satuan);
-CREATE INDEX idx_products_kategori ON products(product_id, kategori, harga);
-CREATE INDEX idx_customers_id ON customers(customer_id, nama, kota);
+-- Index pendukung performa VIEW
+CREATE INDEX idx_orders_cust_status
+    ON orders(customer_id, status, tanggal_order, total_harga);
+CREATE INDEX idx_oi_order_prod
+    ON order_items(order_id, product_id, quantity, harga_satuan);
+CREATE INDEX idx_products_kategori
+    ON products(product_id, kategori, harga);
 
 
-#2
+-- ============================================================
+-- MODUL 2: SISTEM AUDIT & LOGGING
+-- ============================================================
 
 -- 1. TABEL AUDIT LOG
+DROP TABLE IF EXISTS audit_log;
 CREATE TABLE IF NOT EXISTS audit_log (
-	log_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    tabel_name VARCHAR(50) NOT NULL,
-    operasi VARCHAR(20) NOT NULL,
-    record_id INT NOT NULL,
+    log_id       BIGINT       	AUTO_INCREMENT PRIMARY KEY,
+    tabel_name   VARCHAR(50)  	NOT NULL,
+    operasi      VARCHAR(20)  	NOT NULL,
+    record_id    INT          	NOT NULL,
     data_sebelum JSON,
     data_sesudah JSON,
-    waktu DATETIME DEFAULT NOW(),
-    user_db VARCHAR(100) DEFAULT SUBSTRING_INDEX(USER(), '@', -1),
-    ip_info VARCHAR(45)
+    waktu        DATETIME    	DEFAULT NOW(),
+    user_db      VARCHAR(100)	NULL,
+    ip_info      VARCHAR(45)	NULL
 );
 
--- 2. TRIGGER AFTER INSERT ON orders
-
+DROP TRIGGER IF EXISTS trg_audit_insert_orders;
 DELIMITER //
 CREATE TRIGGER trg_audit_insert_orders
-AFTER INSERT ON orders
+BEFORE INSERT ON audit_log
 FOR EACH ROW
 BEGIN
-	INSERT INTO audit_log (audit_log, operasi, record_id, data_sebelum, data_sesudah, ip_info)
-    VALUES (
-		'orders',
-        'INSERT',
-        NEW.order_id,
-        NULL,
-        JSON_OBJECT('customer_id', NEW.customer_id, 'status', NEW.status, 'total_harga', NEW.total_harga, 'tanggal_order', NEW.tanggal_order),
-        SUBSTRING_INDEX(USER(), '@', -1)
-	);
+	IF NEW.user_db IS NULL THEN
+        SET NEW.user_db = SUBSTRING_INDEX(USER(), '@', 1);
+    END IF;
+    IF NEW.ip_info IS NULL THEN
+        SET NEW.ip_info = SUBSTRING_INDEX(USER(), '@', -1);
+    END IF;
 END //
 DELIMITER ;
 
--- 3. TRIGGER AFTER UPDATE ON orders (Hanya Log perubahan status)
+-- Trigger 2: AFTER UPDATE ON orders (hanya log jika status berubah)
+DROP TRIGGER IF EXISTS trg_audit_update_orders;
 DELIMITER //
 CREATE TRIGGER trg_audit_update_orders
 AFTER UPDATE ON orders
@@ -1374,12 +1381,12 @@ FOR EACH ROW
 BEGIN
 	-- Gunakan <=> untuk safe NULL comparison
     IF NOT (OLD.status <=> NEW.status) THEN
-		INSERT INTO audit_log (audit_log, operasi, record_id, data_sebelu, data_sesudah, ip_info)
+		INSERT INTO audit_log (table_name, operasi, record_id, data_sebelum, data_sesudah, ip_info)
 		VALUES (
 			'orders',
 			'UPDATE STATUS',
 			NEW.order_id,
-			JSON_OBJECT('status_baru', NEW.harga),
+			JSON_OBJECT('status_lama', OLD.status),
 			JSON_OBJECT('status_baru', NEW.status, 'waktu_update', NOW()),
 			SUBSTRING_INDEX(USER(), '@', -1)
 		);
@@ -1387,257 +1394,260 @@ BEGIN
 END //
 DELIMITER ;
 
--- 4. TRIGGER AFTER UPDATE ON products (Hanya Log perubahan harga/stok)
+-- Trigger 3: AFTER UPDATE ON products (hanya log jika harga/stok berubah)
+DROP TRIGGER IF EXISTS trg_audit_update_products;
 DELIMITER //
 CREATE TRIGGER trg_audit_update_products
 AFTER UPDATE ON products
 FOR EACH ROW
 BEGIN
-	IF NOT (OLD.harga <=> NEW.harga) OR NOT (OLD.stok <=> NEW.stok) THEN
-		INSERT INTO audit_log (audit_log, operasi, record_id, data_sebelum, data_sesudah, ip_info)
+    IF NOT (OLD.harga <=> NEW.harga) OR NOT (OLD.stok <=> NEW.stok) THEN
+        INSERT INTO audit_log (table_name, operasi, record_id, data_sebelum, data_sesudah, ip_info)
         VALUES (
-			'products',
+            'products',
             'UPDATE_PRICE_STOCK',
             NEW.product_id,
             JSON_OBJECT('harga_lama', OLD.harga, 'stok_lama', OLD.stok),
             JSON_OBJECT('harga_baru', NEW.harga, 'stok_baru', NEW.stok, 'waktu_update', NOW()),
             SUBSTRING_INDEX(USER(), '@', -1)
-		);
-	END IF;
+        );
+    END IF;
 END //
 DELIMITER ;
 
--- Query verifikasi (10 log terbaru format rapi)
-SELECT 
-    log_id,
+-- Query verifikasi audit log (10 terbaru)
+SELECT
     tabel_name,
     operasi,
     record_id,
-    COALESCE(CAST(data_sebelum AS CHAR), 'NULL') AS data_sebelum,
-    COALESCE(CAST(data_sesudah AS CHAR), 'NULL') AS data_sesudah,
-    DATE_FORMAT(waktu, '%d/%m/%Y %H:%i:%s') AS waktu,
+    COALESCE(CAST(data_sebelum AS CHAR), 'NULL')    AS data_sebelum,
+    COALESCE(CAST(data_sesudah AS CHAR), 'NULL')    AS data_sesudah,
+    DATE_FORMAT(waktu, '%d/%m/%Y %H:%i:%s')         AS waktu,
     user_db,
-    COALESCE(ip_info, 'LOCALHOST') AS ip_info
+    COALESCE(ip_info, 'LOCALHOST')                  AS ip_info
 FROM audit_log
 ORDER BY log_id DESC
 LIMIT 10;
 
--- ✅ Test 1: Insert Order Baru
-INSERT INTO orders (customer_id, tanggal_order, status, total_harga) 
-VALUES (101, NOW(), 'pending', 1250000);
+-- Test Modul 2
+INSERT INTO orders (customer_id, tanggal_order, status, total_harga)
+VALUES (1, NOW(), 'pending', 500000);
 
---  Test 2: Update Status Order
-UPDATE orders SET status = 'selesai' WHERE order_id = LAST_INSERT_ID();
+UPDATE orders SET status = 'proses' WHERE order_id = LAST_INSERT_ID();
 
---  Test 3: Update Harga Produk
-UPDATE products SET harga = 85000 WHERE product_id = 1;
+UPDATE products SET harga = 90000, stok = 45 WHERE product_id = 1;
 
---  Test 4: Update Stok Produk
-UPDATE products SET stok = 15 WHERE product_id = 1;
-
---  Cek Hasil Audit
-SELECT * FROM audit_log ORDER BY log_id DESC LIMIT 4;
+SELECT * FROM audit_log ORDER BY log_id DESC LIMIT 5;
 
 
-# 3
+-- ============================================================
+-- MODUL 3: STORED PROCEDURE SUITE
+-- ============================================================
 
+DROP PROCEDURE IF EXISTS sp_proses_order_baru;
+-- Procedure 1: Proses Order Baru (TRANSACTION lengkap)
 DELIMITER //
 
--- 1.PROSES ORDER BARU (Transaksi + Update Stok)
 CREATE PROCEDURE sp_proses_order_baru(
-	IN p_customer_id INT,
-    IN p_product_id INT,
-    IN p_quantity INT,
-    OUT p_order_id INT,
-    OUT p_total DECIMAL(12,2)
+    IN p_customer_id  INT,
+    IN p_product_id   INT,
+    IN p_qty          INT,
+    OUT p_order_id    INT,
+    OUT p_total       DECIMAL(12,2)
 )
 BEGIN
-	DECLARE v_harga DECIMAL(12,2);
-    DECLARE v_stok INT;
+    DECLARE v_harga   DECIMAL(12,2);
+    DECLARE v_stok    INT;
     
     -- Rollback otomatis jika terjadi error tak terduga
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-		ROLLBACK;
+        ROLLBACK;
         RESIGNAL;
-	END;
+    END;
     
     START TRANSACTION;
     
     -- Kunci baris produk untuk menghindari race condition
-    SELECT stok, harga INTO v_stok, v_harga
-    FROM products WHERE product_id = p_product_id FOR UPDATE;
+    SELECT stok, harga
+    INTO v_stok, v_harga
+    FROM products
+    WHERE product_id = p_product_id
+    FOR UPDATE;
     
+    -- Validasi
     IF v_stok IS NULL THEN
-		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Produk tidak ditemukan!';
-	END IF;
-    IF p_quantity <= 0 THEN
-		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Qty harus lebih dari 0!';
-	END IF;
-    IF v_stok < p_quantity THEN
-		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = CONCAT('Stok tidak mencukupi! Tersedia: ', v_stok);
-	END IF;
-    
-    -- Hitung total & buat order
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Produk tidak ditemukan!';
+    END IF;
+
+    IF p_qty <= 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Qty harus lebih dari 0!';
+    END IF;
+
+    -- Buat order
     SET p_total = v_harga * p_qty;
-    
+
     INSERT INTO orders (customer_id, tanggal_order, status, total_harga)
     VALUES (p_customer_id, NOW(), 'pending', p_total);
-    
+
     SET p_order_id = LAST_INSERT_ID();
-    
+
     INSERT INTO order_items (order_id, product_id, quantity, harga_satuan)
     VALUES (p_order_id, p_product_id, p_qty, v_harga);
-    
-    -- Kurang stok
-    UPDATE products SET stok = stok - p_qty WHERE product_id = p_product_id;
-    
+
+    -- Kurangi stok
+    UPDATE products
+    SET stok = stok - p_qty
+    WHERE product_id = p_product_id;
+
     COMMIT;
 END //
+DELIMITER ;
 
--- 2. LAPORAN PERIODE (Revenue, AOV, Produk Terlaris)
+-- Procedure 2: Laporan Periode
+DROP PROCEDURE IF EXISTS sp_laporan_periode;
+
+DELIMITER //
 CREATE PROCEDURE sp_laporan_periode(
-	IN p_tgl_awal DATE,
-    IN p_tgl_akhir DATE
+    IN p_tgl_awal   DATE,
+    IN p_tgl_akhir  DATE
 )
 BEGIN
-	IF p_tgl_awal > p_tgl_akhir THEN
-		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Tanggal awal tidak boleh besar dari tanggal tanggal akhir!';
-	END IF;
-    
-    SELECT
-		COUNT(o.order_id) AS jumlah_order,
-        COALESCE(ROUND(SUM(o.total_harga), 2), 0) AS total_revenue,
-        COALESCE(ROUND(AVG(o.total_harga), 2), 0) AS aov,
-        COALESCE((
-			SELECT(CONCAT(p.nama_produk, ' (', SUM(oi.quantity), 'unit)')
-            FROM order_items AS oi
-            JOIN orders AS o2 ON oi.order_id = o2.order_id
-            JOIN products AS p ON oi.product_id = p.product_id
-            WHERE	o2.status = 'selesai'
-				AND	o2.tanggal_order BETWEEN p_tgl_awal AND p_tgl_akhir
-			GROUP BY p.product_id, p.nama_produk
-            ORDER BY SUM(oi.quantity) DESC
-            LIMIT 1
-		), 'Tidak ada data') AS produk_terlaris
-	FROM orders AS o
-    WHERE	o.status = 'selesai'
-	AND		o.tanggal_order BETWEEN p_tgl_awal AND p_tgl_akhir;
-END //
+    IF p_tgl_awal > p_tgl_akhir THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Tanggal awal tidak boleh lebih besar dari tanggal akhir!';
+    END IF;
 
--- 3. UPDATE STATUS DENGAN VALIDASI TRANSISI (State Machine)
+    SELECT
+        COUNT(o.order_id)                   AS jumlah_order,
+        COALESCE(ROUND(SUM(o.total_harga), 2), 0)   AS total_revenue,
+        COALESCE(ROUND(AVG(o.total_harga), 2), 0)   AS aov,
+        COALESCE((
+            SELECT CONCAT(p.nama_produk, ' (', SUM(oi2.quantity), ' unit)')
+            FROM order_items AS oi2
+            JOIN orders AS o2       ON oi2.order_id   = o2.order_id
+            JOIN products AS p      ON oi2.product_id = p.product_id
+            WHERE o2.status = 'selesai'
+              AND o2.tanggal_order BETWEEN p_tgl_awal AND p_tgl_akhir
+            GROUP BY p.product_id, p.nama_produk
+            ORDER BY SUM(oi2.quantity) DESC
+            LIMIT 1
+        ), 'Tidak ada data')                AS produk_terlaris
+    FROM orders AS o
+    WHERE o.status = 'selesai'
+      AND o.tanggal_order BETWEEN p_tgl_awal AND p_tgl_akhir;
+END //
+DELIMITER ;
+
+-- Procedure 3: Update Status Order (State Machine)
+DROP PROCEDURE IF EXISTS sp_update_status_order;
+
+DELIMITER //
+
 CREATE PROCEDURE sp_update_status_order(
-	IN p_order_id INT,
-    IN p_status_baru VARCHAR(20)
+    IN p_order_id       INT,
+    IN p_status_baru    VARCHAR(20)
 )
 BEGIN
-	DECLARE v_status_lama VARCHAR(20);
-    
+    DECLARE v_status_lama VARCHAR(20);
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-		ROLLBACK;
+        ROLLBACK;
         RESIGNAL;
-	END;
-    
+    END;
+
     START TRANSACTION;
-    
-    -- kunci order untuk update aman
+
     SELECT status INTO v_status_lama
-    FROM orders WHERE order_id = p_order_id FOR UPDATE;
+    FROM orders
+    WHERE order_id = p_order_id
+    FOR UPDATE;
+
+    -- Validasi order ada (dengan ROW_COUNT untuk keamanan ekstra)
+    IF ROW_COUNT() = 0 OR v_status_lama IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order tidak ditemukan!';
+    END IF;
+
+    -- Validasi status tidak sama
+    IF v_status_lama = p_status_baru THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Status sudah sama, tidak perlu update!';
+    END IF;
+
+    -- Validasi transisi yang diizinkan
+    IF      v_status_lama = 'pending' AND p_status_baru = 'proses'   THEN
+        UPDATE orders SET status = p_status_baru WHERE order_id = p_order_id;
+    ELSEIF  v_status_lama = 'proses'  AND p_status_baru = 'selesai'  THEN
+        UPDATE orders SET status = p_status_baru WHERE order_id = p_order_id;
+    ELSEIF  v_status_lama = 'pending' AND p_status_baru = 'batal'    THEN
+        UPDATE orders SET status = p_status_baru WHERE order_id = p_order_id;
     
-    IF v_status_lama IS NULL THEN
-		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Status sudah sama, tidak perlu update!';
-	END IF;
-    
-    -- Validasi teransisi ketat: pending -> diproses -> selesai
-    IF v_status_lama = 'pending' AND p_status_baru = 'diproses' THEN
-		UPDATE orders SET status = p_status_baru WHERE order_id = p_order_id;
-	ELSEIF v_status_lama = 'diproses' AND p_status_baru = 'selesai' THEN
-		UPDATE orders SET status = p_status_baru WHERE order_id = p_order_id;
-	ELSE
-		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transisi status tidak valid! Hanya boleh: pending -> diproses -> selesai';
-	END IF;
-    
+    END IF;
+
     COMMIT;
 END //
 
 DELIMITER ;
 
--- TEST CASE
---  Test 1: Proses Order Baru
-CALL sp_proses_order_baru(1, 1, 5, @oid, @total);
-SELECT @oid AS order_id, @total AS total_harga;
+-- Test Modul 3
+CALL sp_proses_order_baru(1, 1, 2, @oid, @total);
+SELECT @oid AS order_id_baru, @total AS total_harga;
 
---  Test 2: Update Status (pending → diproses)
-CALL sp_update_status_order(@oid, 'diproses');
-
---  Test 3: Update Status (diproses → selesai)
+CALL sp_update_status_order(@oid, 'proses');
 CALL sp_update_status_order(@oid, 'selesai');
 
---  Test 4: Transisi Tidak Valid (loncat pending → selesai)
-CALL sp_update_status_order(@oid, 'selesai');
--- Output: Error 1644. "Transisi status tidak valid!..."
-
---  Test 5: Laporan Periode
 CALL sp_laporan_periode('2024-01-01', '2024-12-31');
 
+-- ============================================================
+-- MODUL 4: ANALISIS ADVANCED DENGAN CTE
+-- ============================================================
 
-# 4
-
--- a. Analisis Kohort Retensi
+-- A. Analisis Kohort Retensi
 -- Mengelompokkan customer berdasarkan bulan pertama order, lalu menghitung berapa % yang masih aktif di bulan berikutnya
 
 WITH customer_cohort AS (
-	-- 1. Tentukan "bulan pertama" setiap customer
     SELECT
-		customer_id,
-        DATE_FORMAT(MIN(tanggal_order), '%Y-%m') AS bulan_bergabung
-	FROM orders
+        customer_id,
+        DATE_FORMAT(MIN(tanggal_order), '%Y%m')     AS bulan_bergabung
+    FROM orders
     WHERE status = 'selesai'
     GROUP BY customer_id
 ),
 customer_activity AS (
-	-- 2. Mapping aktivitas bulanan setiap customer
     SELECT
-		customer_id,
-		DATE_FORMAT(tanggal_order, '%Y-%m') AS bulan_aktif
-	FROM orders
+        customer_id,
+        DATE_FORMAT(tanggal_order, '%Y%m')          AS bulan_aktif
+    FROM orders
     WHERE status = 'selesai'
-    GROUP BY customer_id, bulan_aktif
+    GROUP BY customer_id, DATE_FORMAT(tanggal_order, '%Y%m')
 ),
 cohort_map AS (
-	-- 3. Hitung selisih bulan (0 = bulan pertama, 1 = bulan berikutnya, dst)
     SELECT
-		c.bulan_bergabung,
+        c.bulan_bergabung,
         c.customer_id,
-        PERIOD_DIFF(
-			DATE_FORMAT(a.bulan_aktif, '%Y-%m'),
-            DATE_FORMAT(c.bulan_bergabung, '%Y%m')
-		) AS jarak_bulan
-	FROM customer_cohort AS c
+        PERIOD_DIFF(a.bulan_aktif, c.bulan_bergabung)   AS jarak_bulan
+    FROM customer_cohort AS c
     JOIN customer_activity AS a ON c.customer_id = a.customer_id
 ),
 cohort_retention AS (
-	-- 4. Hitung jumlah customer per jarak bulan
     SELECT
-		bulan_bergabung,
+        bulan_bergabung,
         jarak_bulan,
-		COUNT(DISTINCT customer_id) AS jumlah_aktif
-	FROM cohort_map
+        COUNT(DISTINCT customer_id)                  AS jumlah_aktif
+    FROM cohort_map
     GROUP BY bulan_bergabung, jarak_bulan
 )
--- Tampilkan kohort + retensi bulan berikutnya
 SELECT
-	bulan_bergabung,
-	MAX(CASE WHEN jarak_bulan = 0 THEN jumlah_aktif END) AS customer_awal,
-    MAX(CASE WHEN jarak_bulan = 1 THEN jumlah_aktif END) AS aktif_bulan_berikutnya,
+    bulan_bergabung,
+    MAX(CASE WHEN jarak_bulan = 0 THEN jumlah_aktif END)    AS customer_awal,
+    MAX(CASE WHEN jarak_bulan = 1 THEN jumlah_aktif END)    AS aktif_bulan_berikutnya,
     ROUND(
-		MAX(CASE WHEN jarak_bulan = 1 THEN jumlah_aktif END) * 100.0 /
-        NULLIF(MAX(CASE WHEN jarak_bulan = 0 THEN jumlah_aktif END),0), 2
-	) AS retensi_persen
+        MAX(CASE WHEN jarak_bulan = 1 THEN jumlah_aktif END) * 100.0 /
+        NULLIF(MAX(CASE WHEN jarak_bulan = 0 THEN jumlah_aktif END), 0)
+    , 2)                                                    AS retensi_persen
 FROM cohort_retention
 GROUP BY bulan_bergabung
-ORDER BY bulan_bergabung DESC;
+ORDER BY bulan_bergabung;
 
 -- b. Analisis Basket (product Pairing)
 -- Mencari pasangan produk yang paling sering dibeli dalam satu order yang sama menggunakan SELF JOIN
@@ -1703,21 +1713,77 @@ SELECT periode, revenue, ma_3_bulan
 FROM moving_avg_calc
 ORDER BY periode;
 
+-- B. Analisis Basket (Product Pairing)
+WITH valid_orders AS (
+    SELECT order_id FROM orders WHERE status = 'selesai'
+),
+product_pairs AS (
+    SELECT
+        a.product_id    AS prod_a,
+        b.product_id    AS prod_b
+    FROM order_items a
+    JOIN order_items b  ON a.order_id    = b.order_id
+                       AND a.product_id < b.product_id
+    JOIN valid_orders v ON a.order_id    = v.order_id
+),
+pair_frequency AS (
+    SELECT prod_a, prod_b, COUNT(*) AS frekuensi_bersama
+    FROM product_pairs
+    GROUP BY prod_a, prod_b
+)
+SELECT
+    p1.nama_produk  AS produk_a,
+    p2.nama_produk  AS produk_b,
+    pf.frekuensi_bersama
+FROM pair_frequency pf
+JOIN products p1 ON pf.prod_a = p1.product_id
+JOIN products p2 ON pf.prod_b = p2.product_id
+ORDER BY pf.frekuensi_bersama DESC
+LIMIT 10;
+
+-- C. Moving Average Revenue 3 Bulan
+WITH monthly_revenue AS (
+    SELECT
+        YEAR(tanggal_order)     AS tahun,
+        MONTH(tanggal_order)    AS bulan,
+        SUM(total_harga)        AS revenue
+    FROM orders
+    WHERE status = 'selesai'
+    GROUP BY YEAR(tanggal_order), MONTH(tanggal_order)
+),
+moving_avg_calc AS (
+    SELECT
+        CONCAT(tahun, '-', LPAD(bulan, 2, '0'))     AS periode,
+        revenue,
+        ROUND(
+            AVG(revenue) OVER (
+                ORDER BY tahun, bulan
+                ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+            ), 2
+        )                                           AS ma_3_bulan
+    FROM monthly_revenue
+)
+SELECT periode, revenue, ma_3_bulan
+FROM moving_avg_calc
+ORDER BY periode;
 
 # Tanpa index, CTE berantai + window function akan lambat pada data >100k baris:
 CREATE INDEX idx_orders_cust_date ON orders(customer_id, tanggal_order, status);
 CREATE INDEX idx_oi_order_prod ON order_items(order_id, product_id);
 
 
-# 5
+-- ============================================================
+-- MODUL 5: DASHBOARD EKSEKUTIF
+-- ============================================================
+
 -- 1. Top 3 Customer (FRM) dengan Monetary Tertinggi
 --  Customer Champion: recency ≤30 hari, frequency ≥2, monetary tertinggi
-SELECT 
+SELECT
     nama,
     kota,
     recency,
     frequency,
-    CONCAT('Rp ', FORMAT(monetary, 0, 'id_ID')) AS monetary_formatted,
+    CONCAT('Rp ', FORMAT(monetary, 0))  AS monetary_formatted,
     segmen_rfm
 FROM vw_kinerja_customer
 WHERE segmen_rfm = 'Champion'
@@ -1726,109 +1792,131 @@ LIMIT 3;
 
 -- 2. Star Performer Produk per kategori
 --  Produk Star: ranking #1 per kategori berdasarkan revenue
-WITH ranked_products AS (
-    SELECT *,
-           ROW_NUMBER() OVER (PARTITION BY kategori ORDER BY total_revenue DESC) AS rn
-    FROM vw_kinerja_produk
-)
-SELECT 
+SELECT
     kategori,
     nama_produk,
     total_qty_terjual,
-    CONCAT('Rp ', FORMAT(total_revenue, 0, 'id_ID')) AS revenue_formatted,
+    CONCAT('Rp ', FORMAT(total_revenue, 0))  AS revenue_formatted,
     ranking_per_kategori
-FROM ranked_products
-WHERE rn = 1 AND total_revenue > 0
+FROM vw_kinerja_produk
+WHERE ranking_per_kategori = 1
+  AND total_revenue > 0
 ORDER BY total_revenue DESC;
 
--- 3. Bulan dengan Growth Tertinggi & terendah
--- Analisis Growth Bulanan
+-- 3. Bulan dengan Growth Tertinggi dan Terendah
+-- Catatan: MySQL tidak support NULLS LAST/FIRST, pakai CASE WHEN
 WITH growth_analysis AS (
-    SELECT 
+    SELECT
         periode,
         total_revenue,
         pertumbuhan_persen,
-        ROW_NUMBER() OVER (ORDER BY pertumbuhan_persen DESC NULLS LAST) AS rank_naik,
-        ROW_NUMBER() OVER (ORDER BY pertumbuhan_persen ASC NULLS FIRST) AS rank_turun
+        ROW_NUMBER() OVER (
+            ORDER BY
+                CASE WHEN pertumbuhan_persen IS NULL THEN 1 ELSE 0 END,
+                pertumbuhan_persen DESC
+        ) AS rank_naik,
+        ROW_NUMBER() OVER (
+            ORDER BY
+                CASE WHEN pertumbuhan_persen IS NULL THEN 1 ELSE 0 END,
+                pertumbuhan_persen ASC
+        ) AS rank_turun
     FROM vw_tren_bulanan
     WHERE pertumbuhan_persen IS NOT NULL
 )
-SELECT 'Growth Tertinggi' AS metrik, periode, CONCAT(ROUND(pertumbuhan_persen, 1), '%') AS nilai FROM growth_analysis WHERE rank_naik = 1
+SELECT 'Growth Tertinggi'   AS metrik,
+       periode,
+       CONCAT(pertumbuhan_persen, '%') AS nilai
+FROM growth_analysis WHERE rank_naik = 1
 UNION ALL
-SELECT 'Growth Terendah', periode, CONCAT(ROUND(pertumbuhan_persen, 1), '%') FROM growth_analysis WHERE rank_turun = 1;
+SELECT 'Growth Terendah',
+       periode,
+       CONCAT(pertumbuhan_persen, '%')
+FROM growth_analysis WHERE rank_turun = 1;
 
--- 4. Total Revenue Kumulatif Sampai Hari ini
--- Revenue Kumulatif (Running Total)
-SELECT 
-    CONCAT('Rp ', FORMAT(MAX(running_total), 0, 'id_ID')) AS total_revenue_kumulatif,
-    MAX(periode) AS periode_terakhir,
-    COUNT(*) AS total_bulan_dianalisis
+-- 4. Total Revenue Kumulatif Sampai Hari Ini
+SELECT
+    CONCAT('Rp ', FORMAT(MAX(running_total), 0))   	 AS total_revenue_kumulatif,
+    MAX(periode)                                     AS periode_terakhir,
+    COUNT(*)                                         AS total_bulan_dianalisis
 FROM vw_tren_bulanan;
 
--- 5. Customer At Risk (tidak order > 60 hari)
+
+
+-- 5. Customer At Risk (tidak order lebih dari 60 hari)
 -- Customer At Risk: recency > 60 hari, masih berpotensi direaktivasi
-SELECT 
+SELECT
     nama,
     kota,
     recency,
     frequency,
-    CONCAT('Rp ', FORMAT(monetary, 0, 'id_ID')) AS historical_monetary,
+    CONCAT('Rp ', FORMAT(monetary, 0))  AS historical_monetary,
     segmen_rfm,
-    CASE 
-        WHEN monetary > 1000000 THEN 'Prioritas Tinggi'
-        WHEN frequency >= 2 THEN 'Email Campaign'
-        ELSE 'Push Notification'
+    CASE
+        WHEN monetary > 1000000     THEN 'Prioritas Tinggi — Hubungi Langsung'
+        WHEN frequency >= 2         THEN 'Email Campaign'
+        ELSE                             'Push Notification'
     END AS rekomendasi_aksi
 FROM vw_kinerja_customer
 WHERE segmen_rfm = 'At Risk'
-ORDER BY monetary DESC, recency ASC
-LIMIT 10;
+ORDER BY monetary DESC, recency ASC;
 
 
-# 6
+-- ============================================================
+-- MODUL 6: SISTEM PROTEKSI DATA
+-- ============================================================
+
+-- Trigger 1: BEFORE DELETE ON orders (proteksi data finansial)
+DROP TRIGGER IF EXISTS trg_protect_finished_orders;
 
 DELIMITER //
-
--- 1️. BEFORE DELETE ON orders: Proteksi Data Finansial
 CREATE TRIGGER trg_protect_finished_orders
 BEFORE DELETE ON orders
 FOR EACH ROW
 BEGIN
     IF OLD.status = 'selesai' THEN
         SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Proteksi Data: Order berstatus SELESAI tidak boleh dihapus (data finansial permanen). Gunakan soft delete atau status batal.';
+        SET MESSAGE_TEXT = 'Proteksi: Order SELESAI tidak boleh dihapus. Gunakan status batal untuk pembatalan.';
     END IF;
 END //
+DELIMITER ;
 
 
--- 2️. BEFORE INSERT ON order_items: Validasi Stok Real-time
+-- Trigger 2: BEFORE INSERT ON order_items (validasi stok real-time)
+DROP TRIGGER IF EXISTS trg_validate_stock_insert;
+
+DELIMITER //
 CREATE TRIGGER trg_validate_stock_insert
 BEFORE INSERT ON order_items
 FOR EACH ROW
 BEGIN
     DECLARE v_stok INT;
-    
-    -- Ambil stok produk yang akan ditambahkan
-    SELECT stok INTO v_stok 
-    FROM products 
+
+    SELECT stok INTO v_stok
+    FROM products
     WHERE product_id = NEW.product_id;
 
-    -- Validasi produk ada & stok cukup
     IF v_stok IS NULL THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Produk tidak ditemukan!';
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Produk tidak ditemukan!';
     ELSEIF v_stok < NEW.quantity THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = CONCAT('Stok tidak mencukupi! Tersedia: ', v_stok, ', Dibutuhkan: ', NEW.quantity);
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = CONCAT(
+            'Stok tidak mencukupi! Tersedia: ', v_stok,
+            ', Dibutuhkan: ', NEW.quantity
+        );
     END IF;
 END //
+DELIMITER ;
 
 
--- 3️. AFTER INSERT ON order_items: Auto-Update Total Order
+-- Trigger 3: AFTER INSERT ON order_items (auto-update total_harga di orders)
+DROP TRIGGER IF EXISTS trg_auto_update_total_harga;
+
+DELIMITER //
 CREATE TRIGGER trg_auto_update_total_harga
 AFTER INSERT ON order_items
 FOR EACH ROW
 BEGIN
-    -- Recalculate total_harga berdasarkan semua item di order yang sama
     UPDATE orders
     SET total_harga = (
         SELECT COALESCE(SUM(quantity * harga_satuan), 0)
@@ -1837,160 +1925,153 @@ BEGIN
     )
     WHERE order_id = NEW.order_id;
 END //
-
 DELIMITER ;
 
--- TEST CASE
--- SETUP: Buat order pending baru
-INSERT INTO orders (customer_id, tanggal_order, status) VALUES (101, NOW(), 'pending');
-SET @test_order_id = LAST_INSERT_ID();
+-- Test Modul 6
+INSERT INTO orders (customer_id, tanggal_order, status)
+VALUES (1, NOW(), 'pending');
+SET @test_order = LAST_INSERT_ID();
 
--- TEST 1: Insert Item Valid (Stok Cukup)
--- Asumsi product_id=1 memiliki stok >= 5
-INSERT INTO order_items (order_id, product_id, qty, harga_satuan) 
-VALUES (@test_order_id, 1, 3, 100000);
+-- Test valid: stok cukup
+INSERT INTO order_items (order_id, product_id, quantity, harga_satuan)
+VALUES (@test_order, 2, 1, 250000);
 
--- Cek: total_harga harus otomatis jadi 300.000
-SELECT order_id, total_harga FROM orders WHERE order_id = @test_order_id;
+-- Cek total_harga otomatis terupdate
+SELECT order_id, total_harga FROM orders WHERE order_id = @test_order;
 
-
--- TEST 2: Insert Item Invalid (Stok Kurang)
-UPDATE products SET stok = 2 WHERE product_id = 1;
-INSERT INTO order_items (order_id, product_id, qty, harga_satuan) 
-VALUES (@test_order_id, 1, 5, 100000);
--- Output: Error 1644. "Stok tidak mencukupi! Tersedia: 2, Dibutuhkan: 5"
+-- Test invalid: coba hapus order selesai
+UPDATE orders SET status = 'selesai' WHERE order_id = @test_order;
+DELETE FROM orders WHERE order_id = @test_order;
+-- Output: Error 1644 — Proteksi: Order SELESAI tidak boleh dihapus
 
 
--- TEST 3: Insert Item Valid (Stok Cukup) + Auto-Calculation
-UPDATE products SET stok = 10 WHERE product_id = 1;
-INSERT INTO order_items (order_id, product_id, qty, harga_satuan) 
-VALUES (@test_order_id, 1, 2, 150000);
-
--- Cek: total_harga harus = 300.000 + 300.000 = 600.000
-SELECT order_id, total_harga FROM orders WHERE order_id = @test_order_id;
+-- ============================================================
+-- MODUL 7: LAPORAN BULANAN LENGKAP (5 Result Set)
+-- ============================================================
+DROP PROCEDURE IF EXISTS sp_laporan_bulanan_lengkap;
 
 
--- TEST 4: Delete Order Invalid (Status Selesai)
-UPDATE orders SET status = 'selesai' WHERE order_id = @test_order_id;
-DELETE FROM orders WHERE order_id = @test_order_id;
--- Output: Error 1644. "Proteksi Data: Order berstatus SELESAI tidak boleh dihapus..."
-
-
--- TEST 5: Delete Order Valid (Status Batal)
-UPDATE orders SET status = 'batal' WHERE order_id = @test_order_id;
-DELETE FROM orders WHERE order_id = @test_order_id;
--- Output: Query OK. Order berhasil dihapus.
-
-
-# 7
 DELIMITER //
-
-CREATE PROCEDURE sp_laporan_bulanan_lengkap(IN p_tahun INT, IN p_bulan INT)
+CREATE PROCEDURE sp_laporan_bulanan_lengkap(
+    IN p_tahun  INT,
+    IN p_bulan  INT
+)
 BEGIN
-    -- 📌 Deklarasi variabel (WAJIB di paling awal BEGIN)
-    DECLARE v_start_prev DATE;
-    DECLARE v_end_curr   DATE;
+    DECLARE v_tgl_awal      DATE;
+    DECLARE v_tgl_akhir     DATE;
+    DECLARE v_tgl_prev      DATE;
 
-    -- ✅ Validasi input
+    -- Validasi input
     IF p_bulan < 1 OR p_bulan > 12 OR p_tahun < 2000 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Parameter tahun/bulan tidak valid.';
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Parameter tahun/bulan tidak valid!';
     END IF;
 
-    -- 📅 Hitung rentang tanggal untuk bulan target & bulan sebelumnya
-    SET v_start_prev = STR_TO_DATE(CONCAT(p_tahun, '-', p_bulan, '-01'), '%Y-%m-%d') - INTERVAL 1 MONTH;
-    SET v_end_curr   = LAST_DAY(STR_TO_DATE(CONCAT(p_tahun, '-', p_bulan, '-01'), '%Y-%m-%d'));
+    -- Hitung rentang tanggal
+    SET v_tgl_awal  = STR_TO_DATE(CONCAT(p_tahun, '-', LPAD(p_bulan, 2, '0'), '-01'), '%Y-%m-%d');
+    SET v_tgl_akhir = LAST_DAY(v_tgl_awal);
+    SET v_tgl_prev  = v_tgl_awal - INTERVAL 1 MONTH;
 
-    -- 🔹 RESULT 1: Ringkasan Bulan
+    -- RESULT 1: Ringkasan Bulan
     SELECT
-        COUNT(o.order_id) AS total_order,
-        COALESCE(ROUND(SUM(o.total_harga), 2), 0) AS total_revenue,
-        COALESCE(ROUND(AVG(o.total_harga), 2), 0) AS aov,
+        COUNT(order_id)                                             AS total_order,
+        COALESCE(ROUND(SUM(total_harga), 2), 0)                    AS total_revenue,
+        COALESCE(ROUND(AVG(total_harga), 2), 0)                    AS aov,
         ROUND(
-            COUNT(CASE WHEN o.status = 'selesai' THEN 1 END) * 100.0 / 
-            NULLIF(COUNT(o.order_id), 0), 2
-        ) AS conversion_rate_pct
-    FROM orders o
-    WHERE YEAR(o.tanggal_order) = p_tahun 
-      AND MONTH(o.tanggal_order) = p_bulan;
+            COUNT(CASE WHEN status = 'selesai' THEN 1 END) * 100.0
+            / NULLIF(COUNT(order_id), 0), 2
+        )                                                           AS conversion_rate_pct
+    FROM orders
+    WHERE YEAR(tanggal_order)  = p_tahun
+      AND MONTH(tanggal_order) = p_bulan;
 
-    -- 🔹 RESULT 2: Top 5 Produk Bulan Ini
+    -- RESULT 2: Top 5 Produk Bulan Ini
     SELECT
         p.nama_produk,
         p.kategori,
-        SUM(oi.qty) AS qty_terjual,
-        ROUND(SUM(oi.qty * oi.harga_satuan), 2) AS revenue
+        SUM(oi.quantity)                        AS qty_terjual,
+        ROUND(SUM(oi.quantity * oi.harga_satuan), 2) AS revenue
     FROM orders o
-    JOIN order_items oi ON o.order_id = oi.order_id
-    JOIN products p ON oi.product_id = p.product_id
+    JOIN order_items oi  ON o.order_id    = oi.order_id
+    JOIN products p      ON oi.product_id = p.product_id
     WHERE o.status = 'selesai'
-      AND o.tanggal_order BETWEEN v_start_prev AND v_end_curr -- Filter efisien pakai BETWEEN
+      AND YEAR(o.tanggal_order)  = p_tahun
       AND MONTH(o.tanggal_order) = p_bulan
     GROUP BY p.product_id, p.nama_produk, p.kategori
     ORDER BY revenue DESC
     LIMIT 5;
 
-    -- 🔹 RESULT 3: Top 5 Customer Bulan Ini
+    -- RESULT 3: Top 5 Customer Bulan Ini
     SELECT
         c.nama,
         c.kota,
-        COUNT(o.order_id) AS jumlah_order,
-        ROUND(SUM(o.total_harga), 2) AS total_belanja
+        COUNT(o.order_id)               AS jumlah_order,
+        ROUND(SUM(o.total_harga), 2)    AS total_belanja
     FROM customers c
     JOIN orders o ON c.customer_id = o.customer_id
     WHERE o.status = 'selesai'
-      AND YEAR(o.tanggal_order) = p_tahun 
+      AND YEAR(o.tanggal_order)  = p_tahun
       AND MONTH(o.tanggal_order) = p_bulan
     GROUP BY c.customer_id, c.nama, c.kota
     ORDER BY total_belanja DESC
     LIMIT 5;
 
-    -- 🔹 RESULT 4: Breakdown Kategori + Growth vs Bulan Sebelumnya
-    WITH dua_bulan_data AS (
-        SELECT 
+    -- RESULT 4: Breakdown Kategori + Growth vs Bulan Sebelumnya
+    WITH curr_data AS (
+        SELECT
             p.kategori,
-            YEAR(o.tanggal_order) AS y,
-            MONTH(o.tanggal_order) AS m,
-            SUM(oi.qty * oi.harga_satuan) AS revenue
+            SUM(oi.quantity * oi.harga_satuan)  AS revenue_ini
         FROM orders o
-        JOIN order_items oi ON o.order_id = oi.order_id
-        JOIN products p ON oi.product_id = p.product_id
+        JOIN order_items oi  ON o.order_id    = oi.order_id
+        JOIN products p      ON oi.product_id = p.product_id
         WHERE o.status = 'selesai'
-          AND o.tanggal_order BETWEEN v_start_prev AND v_end_curr
-        GROUP BY p.kategori, y, m
+          AND YEAR(o.tanggal_order)  = p_tahun
+          AND MONTH(o.tanggal_order) = p_bulan
+        GROUP BY p.kategori
     ),
-    curr_month AS (SELECT kategori, revenue FROM dua_bulan_data WHERE y = p_tahun AND m = p_bulan),
-    prev_month AS (
-        SELECT kategori, revenue 
-        FROM dua_bulan_data 
-        WHERE (y = p_tahun AND m = p_bulan - 1) 
-           OR (y = p_tahun - 1 AND m = 12 AND p_bulan = 1)
+    prev_data AS (
+        SELECT
+            p.kategori,
+            SUM(oi.quantity * oi.harga_satuan)  AS revenue_lalu
+        FROM orders o
+        JOIN order_items oi  ON o.order_id    = oi.order_id
+        JOIN products p      ON oi.product_id = p.product_id
+        WHERE o.status = 'selesai'
+          AND YEAR(o.tanggal_order)  = YEAR(v_tgl_prev)
+          AND MONTH(o.tanggal_order) = MONTH(v_tgl_prev)
+        GROUP BY p.kategori
     )
-    SELECT 
+    SELECT
         c.kategori,
-        COALESCE(c.revenue, 0) AS revenue_bulan_ini,
-        COALESCE(p.revenue, 0) AS revenue_bulan_lalu,
-        CASE WHEN COALESCE(p.revenue, 0) = 0 THEN NULL
-             ELSE ROUND((c.revenue - p.revenue) / p.revenue * 100, 2)
-        END AS growth_persen
-    FROM curr_month c
-    LEFT JOIN prev_month p ON c.kategori = p.kategori
-    ORDER BY c.revenue DESC;
+        COALESCE(c.revenue_ini, 0)      AS revenue_bulan_ini,
+        COALESCE(p.revenue_lalu, 0)     AS revenue_bulan_lalu,
+        CASE
+            WHEN COALESCE(p.revenue_lalu, 0) = 0 THEN NULL
+            ELSE ROUND(
+                (c.revenue_ini - p.revenue_lalu) / p.revenue_lalu * 100, 2
+            )
+        END                             AS growth_persen
+    FROM curr_data c
+    LEFT JOIN prev_data p ON c.kategori = p.kategori
+    ORDER BY c.revenue_ini DESC;
 
-    -- 🔹 RESULT 5: Customer Baru Mendaftar Bulan Ini
-    SELECT 
+    -- RESULT 5: Customer Baru Bulan Ini
+    SELECT
         customer_id,
         nama,
         email,
         kota,
         tanggal_daftar
     FROM customers
-    WHERE YEAR(tanggal_daftar) = p_tahun 
+    WHERE YEAR(tanggal_daftar)  = p_tahun
       AND MONTH(tanggal_daftar) = p_bulan
     ORDER BY tanggal_daftar DESC;
 
 END //
-
 DELIMITER ;
+
+-- Test Modul 7
+CALL sp_laporan_bulanan_lengkap(2024, 1);
 
 -- Call test
 CALL sp_laporan_bulanan_lengkap(2024, 1);

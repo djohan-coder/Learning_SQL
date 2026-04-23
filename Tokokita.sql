@@ -16,6 +16,58 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
+-- Table structure for table `audit_log`
+--
+
+DROP TABLE IF EXISTS `audit_log`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `audit_log` (
+  `log_id` bigint NOT NULL AUTO_INCREMENT,
+  `tabel_name` varchar(50) NOT NULL,
+  `operasi` varchar(20) NOT NULL,
+  `record_id` int NOT NULL,
+  `data_sebelum` json DEFAULT NULL,
+  `data_sesudah` json DEFAULT NULL,
+  `waktu` datetime DEFAULT CURRENT_TIMESTAMP,
+  `user_db` varchar(100) DEFAULT NULL,
+  `ip_info` varchar(45) DEFAULT NULL,
+  PRIMARY KEY (`log_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `audit_log`
+--
+
+LOCK TABLES `audit_log` WRITE;
+/*!40000 ALTER TABLE `audit_log` DISABLE KEYS */;
+/*!40000 ALTER TABLE `audit_log` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_0900_ai_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_audit_insert_orders` BEFORE INSERT ON `audit_log` FOR EACH ROW BEGIN
+	IF NEW.user_db IS NULL THEN
+        SET NEW.user_db = SUBSTRING_INDEX(USER(), '@', 1);
+    END IF;
+    IF NEW.ip_info IS NULL THEN
+        SET NEW.ip_info = SUBSTRING_INDEX(USER(), '@', -1);
+    END IF;
+END */;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+
+--
 -- Table structure for table `customers`
 --
 
@@ -112,11 +164,11 @@ CREATE TABLE `order_items` (
   `harga_satuan` decimal(12,2) NOT NULL,
   `subtotal` decimal(12,2) GENERATED ALWAYS AS ((`quantity` * `harga_satuan`)) STORED,
   PRIMARY KEY (`item_id`),
-  KEY `fk_order_items_orders` (`order_id`),
   KEY `fk_order_items_products` (`product_id`),
+  KEY `idx_oi_order_prod` (`order_id`,`product_id`),
   CONSTRAINT `fk_order_items_orders` FOREIGN KEY (`order_id`) REFERENCES `orders` (`order_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_order_items_products` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -143,11 +195,11 @@ CREATE TABLE `orders` (
   `status` enum('pending','proses','selesai','batal') DEFAULT NULL,
   `total_harga` decimal(12,2) DEFAULT NULL,
   PRIMARY KEY (`order_id`),
-  KEY `fk_order_customers` (`customer_id`),
   KEY `idx_orders_date_status_revenue` (`tanggal_order`,`status`,`total_harga`),
   KEY `idx_orders_status_date` (`status`,`tanggal_order`,`customer_id`),
+  KEY `idx_orders_cust_date` (`customer_id`,`tanggal_order`,`status`),
   CONSTRAINT `fk_order_customers` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -156,7 +208,7 @@ CREATE TABLE `orders` (
 
 LOCK TABLES `orders` WRITE;
 /*!40000 ALTER TABLE `orders` DISABLE KEYS */;
-INSERT INTO `orders` VALUES (1,1,'2026-04-04 03:04:46','selesai',8500000.00),(2,2,'2026-04-04 03:04:46','selesai',250000.00),(3,3,'2026-04-04 03:04:46','selesai',750000.00),(4,4,'2026-04-04 03:04:46','selesai',2800000.00),(5,5,'2026-04-04 03:04:46','proses',85000.00),(6,6,'2026-04-04 03:04:46','proses',320000.00),(7,7,'2026-04-04 03:04:46','pending',450000.00),(8,8,'2026-04-04 03:04:46','pending',380000.00),(13,2,'2026-04-20 02:54:02','pending',1250000.00);
+INSERT INTO `orders` VALUES (1,1,'2026-04-04 03:04:46','selesai',8500000.00),(2,2,'2026-04-04 03:04:46','selesai',250000.00),(3,3,'2026-04-04 03:04:46','selesai',750000.00),(4,4,'2026-04-04 03:04:46','selesai',2800000.00),(5,5,'2026-04-04 03:04:46','proses',85000.00),(6,6,'2026-04-04 03:04:46','proses',320000.00),(7,7,'2026-04-04 03:04:46','pending',450000.00),(8,8,'2026-04-04 03:04:46','pending',380000.00),(13,2,'2026-04-20 02:54:02','pending',1250000.00),(15,1,'2026-04-24 03:06:31','pending',500000.00),(16,1,'2026-04-24 03:11:25','pending',500000.00),(17,1,'2026-04-24 03:17:32','pending',500000.00),(18,1,'2026-04-24 03:20:06','pending',500000.00);
 /*!40000 ALTER TABLE `orders` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!50003 SET @saved_cs_client      = @@character_set_client */ ;
@@ -168,19 +220,19 @@ UNLOCK TABLES;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
-/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_audit_insert_orders` AFTER INSERT ON `orders` FOR EACH ROW BEGIN
-	INSERT INTO log_aktivitas (tabel_name, aksi, data_lama, data_baru, waktu, user_db)
-    VALUES	(
-		'orders',
-        'INSERT',
-        NULL,
-        CONCAT('order_id:', NEW.order_id,
-				' | customer_id:', NEW.customer_id,
-                ' | status:', NEW.status,
-                ' | total_harga:', NEW.total_harga),
-		NOW(),
-        USER()
-	);
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_audit_update_orders` AFTER UPDATE ON `orders` FOR EACH ROW BEGIN
+	-- Gunakan <=> untuk safe NULL comparison
+    IF NOT (OLD.status <=> NEW.status) THEN
+		INSERT INTO audit_log (table_name, operasi, record_id, data_sebelum, data_sesudah, ip_info)
+		VALUES (
+			'orders',
+			'UPDATE STATUS',
+			NEW.order_id,
+			JSON_OBJECT('status_lama', OLD.status),
+			JSON_OBJECT('status_baru', NEW.status, 'waktu_update', NOW()),
+			SUBSTRING_INDEX(USER(), '@', -1)
+		);
+	END IF;
 END */;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
@@ -294,17 +346,17 @@ DELIMITER ;
 /*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER `trg_audit_update_products` AFTER UPDATE ON `products` FOR EACH ROW BEGIN
-	IF NOT (OLD.harga <=> NEW.harga) OR NOT (OLD.stok <=> NEW.stok) THEN
-		INSERT INTO audit_log (tabel_name, operasi, record_id, data_sebelum, data_sesudah, ip_info)
+    IF NOT (OLD.harga <=> NEW.harga) OR NOT (OLD.stok <=> NEW.stok) THEN
+        INSERT INTO audit_log (table_name, operasi, record_id, data_sebelum, data_sesudah, ip_info)
         VALUES (
-			'products',
+            'products',
             'UPDATE_PRICE_STOCK',
             NEW.product_id,
             JSON_OBJECT('harga_lama', OLD.harga, 'stok_lama', OLD.stok),
             JSON_OBJECT('harga_baru', NEW.harga, 'stok_baru', NEW.stok, 'waktu_update', NOW()),
             SUBSTRING_INDEX(USER(), '@', -1)
-		);
-	END IF;
+        );
+    END IF;
 END */;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
@@ -344,7 +396,7 @@ SET @saved_cs_client     = @@character_set_client;
  1 AS `kategori`,
  1 AS `total_qty_terjual`,
  1 AS `total_revenue`,
- 1 AS `rangking_per_kategori`*/;
+ 1 AS `ranking_per_kategori`*/;
 SET character_set_client = @saved_cs_client;
 
 --
@@ -469,7 +521,7 @@ SET character_set_client = @saved_cs_client;
 /*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
 /*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
-/*!50001 VIEW `vw_kinerja_produk` AS select `product_agg`.`product_id` AS `product_id`,`product_agg`.`nama_produk` AS `nama_produk`,`product_agg`.`kategori` AS `kategori`,`product_agg`.`total_qty_terjual` AS `total_qty_terjual`,`product_agg`.`total_revenue` AS `total_revenue`,rank() OVER (PARTITION BY `product_agg`.`kategori` ORDER BY `product_agg`.`total_revenue` desc )  AS `rangking_per_kategori` from (select `p`.`product_id` AS `product_id`,`p`.`nama_produk` AS `nama_produk`,`p`.`kategori` AS `kategori`,coalesce(sum(`oi`.`quantity`),0) AS `total_qty_terjual`,coalesce(round(sum((`oi`.`quantity` * `oi`.`harga_satuan`)),2),0) AS `total_revenue` from ((`products` `p` left join `order_items` `oi` on((`p`.`product_id` = `oi`.`product_id`))) left join `orders` `o` on(((`oi`.`order_id` = `o`.`order_id`) and (`o`.`status` = 'selesai')))) group by `p`.`product_id`,`p`.`nama_produk`,`p`.`kategori`) `product_agg` */;
+/*!50001 VIEW `vw_kinerja_produk` AS select `product_agg`.`product_id` AS `product_id`,`product_agg`.`nama_produk` AS `nama_produk`,`product_agg`.`kategori` AS `kategori`,`product_agg`.`total_qty_terjual` AS `total_qty_terjual`,`product_agg`.`total_revenue` AS `total_revenue`,rank() OVER (PARTITION BY `product_agg`.`kategori` ORDER BY `product_agg`.`total_revenue` desc )  AS `ranking_per_kategori` from (select `p`.`product_id` AS `product_id`,`p`.`nama_produk` AS `nama_produk`,`p`.`kategori` AS `kategori`,coalesce(sum(`oi`.`quantity`),0) AS `total_qty_terjual`,coalesce(round(sum((`oi`.`quantity` * `oi`.`harga_satuan`)),2),0) AS `total_revenue` from ((`products` `p` left join `order_items` `oi` on((`p`.`product_id` = `oi`.`product_id`))) left join `orders` `o` on(((`oi`.`order_id` = `o`.`order_id`) and (`o`.`status` = 'selesai')))) group by `p`.`product_id`,`p`.`nama_produk`,`p`.`kategori`) `product_agg` */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
@@ -541,7 +593,7 @@ SET character_set_client = @saved_cs_client;
 /*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
 /*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
-/*!50001 VIEW `vw_transaksi_lengkap` AS select concat('ORD-',lpad(`o`.`order_id`,4,'0')) AS `kode_order`,concat(`c`.`nama`,' (',`c`.`kota`,')') AS `nama_customer_kota`,concat(`p`.`nama_produk`,' [',`p`.`kategori`,']') AS `nama_produk_kategori`,concat('Rp ',replace(format(`oi`.`harga_satuan`,2),',','.')) AS `harga_rupiah`,`oi`.`quantity` AS `quantity`,round((`oi`.`quantity` * `oi`.`harga_satuan`),2) AS `subtotal_item`,`o`.`tanggal_order` AS `tanggal_order`,`o`.`status` AS `status` from (((`orders` `o` join `customers` `c` on((`o`.`customer_id` = `c`.`customer_id`))) join `order_items` `oi` on((`o`.`order_id` = `oi`.`order_id`))) join `products` `p` on((`oi`.`product_id` = `p`.`product_id`))) */;
+/*!50001 VIEW `vw_transaksi_lengkap` AS select concat('ORD-',lpad(`o`.`order_id`,4,'0')) AS `kode_order`,concat(`c`.`nama`,' (',`c`.`kota`,')') AS `nama_customer_kota`,concat(`p`.`nama_produk`,' [',`p`.`kategori`,']') AS `nama_produk_kategori`,concat('Rp ',format(`oi`.`harga_satuan`,0)) AS `harga_rupiah`,`oi`.`quantity` AS `quantity`,round((`oi`.`quantity` * `oi`.`harga_satuan`),2) AS `subtotal_item`,`o`.`tanggal_order` AS `tanggal_order`,`o`.`status` AS `status` from (((`orders` `o` join `customers` `c` on((`o`.`customer_id` = `c`.`customer_id`))) join `order_items` `oi` on((`o`.`order_id` = `oi`.`order_id`))) join `products` `p` on((`oi`.`product_id` = `p`.`product_id`))) */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
@@ -559,7 +611,7 @@ SET character_set_client = @saved_cs_client;
 /*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
 /*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
-/*!50001 VIEW `vw_tren_bulanan` AS select concat(`monthly_agg`.`tahun`,'-',lpad(`monthly_agg`.`bulan`,2,'0')) AS `periode`,`monthly_agg`.`jumlah_order` AS `jumlah_order`,`monthly_agg`.`total_revenue` AS `total_revenue`,round(`monthly_agg`.`aov`,2) AS `average_order_value`,`monthly_agg`.`revenue_bulan_lalu` AS `revenue_bulan_lalu`,(case when ((`monthly_agg`.`revenue_bulan_lalu` is null) or (`monthly_agg`.`revenue_bulan_lalu` = 0)) then NULL else round((((`monthly_agg`.`total_revenue` - `monthly_agg`.`revenue_bulan_lalu`) / `monthly_agg`.`revenue_bulan_lalu`) * 100),2) end) AS `pertumbuhan_persen`,`monthly_agg`.`running_total` AS `running_total` from (select year(`orders`.`tanggal_order`) AS `tahun`,month(`orders`.`tanggal_order`) AS `bulan`,count(`orders`.`order_id`) AS `jumlah_order`,coalesce(sum(`orders`.`total_harga`),0) AS `total_revenue`,coalesce(avg(`orders`.`total_harga`),0) AS `aov`,lag(sum(`orders`.`total_harga`)) OVER (ORDER BY year(`orders`.`tanggal_order`),month(`orders`.`tanggal_order`) )  AS `revenue_bulan_lalu`,sum(sum(`orders`.`total_harga`)) OVER (ORDER BY year(`orders`.`tanggal_order`),month(`orders`.`tanggal_order`) ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)  AS `running_total` from `orders` where (`orders`.`status` = 'selesai') group by year(`orders`.`tanggal_order`),month(`orders`.`tanggal_order`)) `monthly_agg` */;
+/*!50001 VIEW `vw_tren_bulanan` AS select concat(`monthly_agg`.`tahun`,'-',lpad(`monthly_agg`.`bulan`,2,'0')) AS `periode`,`monthly_agg`.`jumlah_order` AS `jumlah_order`,`monthly_agg`.`total_revenue` AS `total_revenue`,round(`monthly_agg`.`aov`,2) AS `average_order_value`,`monthly_agg`.`revenue_bulan_lalu` AS `revenue_bulan_lalu`,(case when ((`monthly_agg`.`revenue_bulan_lalu` is null) or (`monthly_agg`.`revenue_bulan_lalu` = 0)) then NULL else round((((`monthly_agg`.`total_revenue` - `monthly_agg`.`revenue_bulan_lalu`) / `monthly_agg`.`revenue_bulan_lalu`) * 100),2) end) AS `pertumbuhan_persen`,round(`monthly_agg`.`running_total`,2) AS `running_total` from (select year(`orders`.`tanggal_order`) AS `tahun`,month(`orders`.`tanggal_order`) AS `bulan`,count(`orders`.`order_id`) AS `jumlah_order`,coalesce(sum(`orders`.`total_harga`),0) AS `total_revenue`,coalesce(avg(`orders`.`total_harga`),0) AS `aov`,lag(sum(`orders`.`total_harga`)) OVER (ORDER BY year(`orders`.`tanggal_order`),month(`orders`.`tanggal_order`) )  AS `revenue_bulan_lalu`,sum(sum(`orders`.`total_harga`)) OVER (ORDER BY year(`orders`.`tanggal_order`),month(`orders`.`tanggal_order`) ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)  AS `running_total` from `orders` where (`orders`.`status` = 'selesai') group by year(`orders`.`tanggal_order`),month(`orders`.`tanggal_order`)) `monthly_agg` */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
@@ -573,4 +625,4 @@ SET character_set_client = @saved_cs_client;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-04-22 23:42:08
+-- Dump completed on 2026-04-24  4:23:35
